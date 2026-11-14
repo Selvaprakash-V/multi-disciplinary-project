@@ -1,0 +1,49 @@
+module_id: "MOD-DEMO-001"
+name: "Standard 120 Half-Cut Mono PERC"
+width_mm: 1040.0
+length_mm: 1760.0
+layout:
+  cells: 120
+  half_cut: true
+  cell_size: "M10"
+  busbars: 9
+  rows: 20
+  cols: 6
+  cell_width_mm: 91.0
+  cell_height_mm: 182.0
+stack:
+  - name: "glass"
+    thickness_mm: 3.2
+    density_kg_m3: 2500.0
+    youngs_modulus_gpa: 72.0
+    poissons_ratio: 0.22
+    damping_ratio: 0.01
+    material_model: "isotropic_elastic"
+  - name: "eva_front"
+    thickness_mm: 0.45
+    density_kg_m3: 960.0
+    youngs_modulus_gpa: 0.0125
+    poissons_ratio: 0.45
+    damping_ratio: 0.15
+    material_model: "viscoelastic_prony"
+  - name: "si_cell"
+    thickness_mm: 0.175
+    density_kg_m3: 2330.0
+    youngs_modulus_gpa: 130.0
+    poissons_ratio: 0.28
+    damping_ratio: 0.005
+    material_model: "anisotropic_silicon"
+  - name: "eva_back"
+    thickness_mm: 0.45
+    density_kg_m3: 960.0
+    youngs_modulus_gpa: 0.0125
+    poissons_ratio: 0.45
+    damping_ratio: 0.15
+    material_model: "viscoelastic_prony"
+  - name: "backsheet"
+    thickness_mm: 0.30
+    density_kg_m3: 1200.0
+    youngs_modulus_gpa: 3.5
+    poissons_ratio: 0.35
+    damping_ratio: 0.03
+    material_model: "isotropic_elastic"

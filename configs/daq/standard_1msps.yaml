@@ -1,0 +1,16 @@
+preamp:
+  gain_db: 40.0
+  input_noise_nv_rthz: 5.0
+  band_khz: [50.0, 400.0]
+  input_impedance_kohm: 100.0
+adc:
+  bits: 12
+  rate_hz: 1000000.0
+  full_scale_volts: 3.3
+  jitter_ns: 20.0
+  skew_ns: 50.0
+trigger:
+  threshold_mv: 20.0
+  pre_samples: 512
+  post_samples: 2048
+  dead_time_us: 500.0

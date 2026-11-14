@@ -1,0 +1,10 @@
+source_class: "crack_initiation"
+crack_type: "diagonal"
+noise_class: "none"
+x_mm: 520.0
+y_mm: 880.0
+cell_id: "C_10_3"
+energy_arbitrary: 1.0
+rise_time_us: 1.5
+duration_us: 25.0
+orientation_deg: 45.0

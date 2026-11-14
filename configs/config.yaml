@@ -1,0 +1,8 @@
+defaults:
+  - module: standard_120
+  - daq: standard_1msps
+  - source: crack_diagonal
+
+seed: 42
+temperature_c: 25.0
+output_dir: "outputs"

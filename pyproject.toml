@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "acoustisolar-monorepo"
+version = "0.1.0"
+description = "Simulation-first acoustic emission platform for solar panel micro-crack detection"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "AcoustiSolar Engineering Team", email = "engineering@acoustisolar.io" }]
+license = { text = "Apache-2.0" }
+dependencies = [
+    "numpy>=1.26.0",
+    "pandas>=2.0.0",
+    "pydantic>=2.5.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+    "matplotlib>=3.8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [
+    "packages/schemas/src",
+    "packages/physics/src",
+    "packages/daqtwin/src",
+    "packages/dsp/src",
+    "packages/ml/src",
+    "packages/sdk/src",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+ignore = ["E501"]

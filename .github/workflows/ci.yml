@@ -1,0 +1,44 @@
+name: AcoustiSolar CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy pandas pydantic pyyaml pytest pytest-cov ruff mypy matplotlib
+
+      - name: Lint with ruff
+        run: |
+          ruff check .
+
+      - name: Run verification & unit tests with coverage
+        env:
+          PYTHONPATH: packages/schemas/src:packages/physics/src:packages/daqtwin/src:packages/dsp/src:packages/ml/src:packages/sdk/src
+        run: |
+          pytest --cov=packages --cov-report=term-missing --cov-report=xml tests/
+
+      - name: Run physics V&V suite
+        env:
+          PYTHONPATH: packages/schemas/src:packages/physics/src:packages/daqtwin/src:packages/dsp/src:packages/ml/src:packages/sdk/src
+        run: |
+          python validation/run_vv_suite.py

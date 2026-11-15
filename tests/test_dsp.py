@@ -68,3 +68,4 @@ def test_tdoa_localization():
     # Error should be sub-millimeter for ideal geometric TDOA
     err = np.hypot(res["x_mm"] - src_true[0], res["y_mm"] - src_true[1])
     assert err < 5.0 # within 5 mm
+

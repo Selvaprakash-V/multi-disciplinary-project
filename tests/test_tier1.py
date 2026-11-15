@@ -42,3 +42,4 @@ def test_tier1_fidelity_gap():
     assert "spectral_centroid_error_pct" in gap
     assert "envelope_correlation" in gap
     assert gap["envelope_correlation"] > 0.8
+

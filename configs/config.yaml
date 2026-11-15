@@ -6,3 +6,4 @@ defaults:
 seed: 42
 temperature_c: 25.0
 output_dir: "outputs"
+

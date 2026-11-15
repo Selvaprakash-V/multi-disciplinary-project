@@ -33,3 +33,4 @@ class DigitalBandpassFilter:
             for ch in range(x.shape[0]):
                 out[ch] = np.fft.irfft(np.fft.rfft(x[ch]) * H, n=n)
             return out
+

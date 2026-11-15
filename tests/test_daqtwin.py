@@ -82,3 +82,4 @@ def test_full_daq_digital_twin():
     assert out["raw_counts"].shape == (4, n)
     assert out["triggered"] is True
     assert out["windowed_counts"] is not None
+

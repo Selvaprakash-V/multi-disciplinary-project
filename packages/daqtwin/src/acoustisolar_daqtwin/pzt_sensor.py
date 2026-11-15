@@ -55,3 +55,4 @@ class PZTSensorModel:
                 V_fft = np.fft.rfft(surface_velocity[ch]) * H
                 V_out[ch] = np.fft.irfft(V_fft, n=n)
             return V_out
+

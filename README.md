@@ -103,3 +103,4 @@ print(f"Generalization F1: {metrics['f1_score']:.3f}, ECE: {metrics['ece']:.3f}"
 - **M8: ML Baseline & Deep Models:** Gradient Boosted Trees, 1D-ResNet waveform classifier, held-out module configuration evaluation harness (PRD 9.5).
 - **M9: Tier-1 Solver:** 2D elastodynamic plate wave solver with absorbing sponge boundary layers (PML), Courant stability compliance, and multi-fidelity gap reporting.
 - **M10: Validation Suite & Report:** Automated V&V suite (`validation/run_vv_suite.py`) asserting reciprocity, CFL stability, dispersion match, and zero-leakage ML metrics.
+

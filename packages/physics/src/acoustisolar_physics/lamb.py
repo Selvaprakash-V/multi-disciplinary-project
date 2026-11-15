@@ -7,15 +7,10 @@ class LambDispersionSolver:
     Exact analytical Rayleigh-Lamb dispersion solver for an isotropic free elastic plate.
     Plate thickness d, half-thickness h = d/2.
     
-    Rayleigh-Lamb frequency equations:
-    Symmetric (S) modes:
-        tan(q*h) / tan(p*h) + 4 * k^2 * p * q / (k^2 - q^2)^2 = 0
-    Antisymmetric (A) modes:
-        tan(p*h) / tan(q*h) + 4 * k^2 * p * q / (k^2 - q^2)^2 = 0
-    where:
-        p = sqrt(omega^2 / c_L^2 - k^2)
-        q = sqrt(omega^2 / c_T^2 - k^2)
-        k = omega / c_phase
+    Uses numerically exact real-valued Lamb characteristic functions for:
+    - Fundamental Symmetric mode (S0)
+    - Fundamental Antisymmetric mode (A0)
+    without branch cut singularities or complex root trapping.
     """
 
     def __init__(self, material: IsotropicMaterial = GLASS_MATERIAL, thickness_m: float = 3.2e-3):
@@ -24,168 +19,113 @@ class LambDispersionSolver:
         self.h = thickness_m / 2.0
         self.cL = material.c_longitudinal
         self.cT = material.c_transverse
+        # Approximate Rayleigh surface wave velocity
+        nu = material.poissons_ratio
+        self.cR = self.cT * (0.87 + 1.12 * nu) / (1.0 + nu)
 
-    def rayleigh_lamb_symmetric(self, cp: float, omega: float) -> float:
-        """Characteristic function for symmetric (S) modes."""
+    def char_eq_s0(self, cp: float, omega: float) -> float:
+        """Exact real-valued characteristic function for symmetric (S) modes."""
         k = omega / cp
         h = self.h
-        
-        # Check cutoffs for real/imaginary radicals
-        arg_p = (omega / self.cL)**2 - k**2
-        arg_q = (omega / self.cT)**2 - k**2
-        
-        # Handle complex radicals stably
-        p = 1j * np.sqrt(-arg_p) if arg_p < 0 else np.sqrt(arg_p)
-        q = 1j * np.sqrt(-arg_q) if arg_q < 0 else np.sqrt(arg_q)
-        
-        # Avoid division by zero
-        denom = (k**2 - q**2)**2
-        if np.abs(denom) < 1e-12:
-            return 1e6
-            
-        tan_qh = np.tan(q * h)
-        tan_ph = np.tan(p * h)
-        if np.abs(tan_ph) < 1e-12:
-            return 1e6
-            
-        val = tan_qh / tan_ph + (4.0 * (k**2) * p * q) / denom
-        return float(np.real(val))
+        if cp > self.cT:
+            q = np.sqrt((omega / self.cT)**2 - k**2)
+            alpha_p = np.sqrt(k**2 - (omega / self.cL)**2)
+            denom = (k**2 - q**2)**2
+            return (4.0 * (k**2) * alpha_p * q) / denom - (np.tan(q * h) / np.tanh(alpha_p * h))
+        else:
+            alpha_p = np.sqrt(k**2 - (omega / self.cL)**2)
+            alpha_q = np.sqrt(k**2 - (omega / self.cT)**2)
+            denom = (2.0 * k**2 - (omega / self.cT)**2)**2
+            return (np.tanh(alpha_q * h) / np.tanh(alpha_p * h)) - (4.0 * (k**2) * alpha_p * alpha_q) / denom
 
-    def rayleigh_lamb_antisymmetric(self, cp: float, omega: float) -> float:
-        """Characteristic function for antisymmetric (A) modes."""
+    def char_eq_a0(self, cp: float, omega: float) -> float:
+        """Exact real-valued characteristic function for antisymmetric (A) modes."""
         k = omega / cp
         h = self.h
-        
-        arg_p = (omega / self.cL)**2 - k**2
-        arg_q = (omega / self.cT)**2 - k**2
-        
-        p = 1j * np.sqrt(-arg_p) if arg_p < 0 else np.sqrt(arg_p)
-        q = 1j * np.sqrt(-arg_q) if arg_q < 0 else np.sqrt(arg_q)
-        
-        denom = (k**2 - q**2)**2
-        if np.abs(denom) < 1e-12:
-            return 1e6
-            
-        tan_ph = np.tan(p * h)
-        tan_qh = np.tan(q * h)
-        if np.abs(tan_qh) < 1e-12:
-            return 1e6
-            
-        val = tan_ph / tan_qh + (4.0 * (k**2) * p * q) / denom
-        return float(np.real(val))
+        if cp < self.cT:
+            alpha_p = np.sqrt(k**2 - (omega / self.cL)**2)
+            alpha_q = np.sqrt(k**2 - (omega / self.cT)**2)
+            denom = (2.0 * k**2 - (omega / self.cT)**2)**2
+            return (np.tanh(alpha_p * h) / np.tanh(alpha_q * h)) - (4.0 * (k**2) * alpha_p * alpha_q) / denom
+        else:
+            q = np.sqrt((omega / self.cT)**2 - k**2)
+            alpha_p = np.sqrt(k**2 - (omega / self.cL)**2)
+            denom = (k**2 - q**2)**2
+            return (np.tanh(alpha_p * h) / np.tan(q * h)) + (4.0 * (k**2) * alpha_p * q) / denom
 
     def find_phase_velocity_s0(self, freq_hz: float) -> float:
-        """
-        Compute phase velocity cp for fundamental symmetric mode S0 at frequency freq_hz.
-        At f -> 0, cp -> c_plate = sqrt(E / (rho * (1 - nu^2))).
-        """
+        """Compute phase velocity cp for fundamental symmetric mode S0 at frequency freq_hz."""
         if freq_hz <= 10.0:
             return self.material.c_plate_s0_limit
             
         omega = 2.0 * np.pi * freq_hz
         c_plate = self.material.c_plate_s0_limit
         
-        # S0 phase velocity starts at c_plate at low f*d and gradually decreases.
-        # Note: c = c_T (bulk shear speed ~3436 m/s) is a branch singularity (q = 0),
-        # so for S0 mode we search strictly above c_T (cp_min = 1.05 * c_T).
-        cp_min = self.cT * 1.05
-        cp_max = c_plate * 1.02
+        # S0 phase velocity is bounded between cT and c_plate in this frequency band
+        cps = np.linspace(c_plate, self.cT * 1.005, 120)
+        vals = [self.char_eq_s0(c, omega) for c in cps]
         
-        # Prioritize root closest to c_plate
-        cps = np.linspace(cp_max, cp_min, 150)
-        vals = [self.rayleigh_lamb_symmetric(c, omega) for c in cps]
-        
-        best_cp = c_plate
-        min_dist_to_cplate = float('inf')
         for i in range(len(cps) - 1):
             if np.sign(vals[i]) != np.sign(vals[i+1]) and abs(vals[i] - vals[i+1]) < 20.0:
-                low, high = min(cps[i], cps[i+1]), max(cps[i], cps[i+1])
-                for _ in range(30):
+                low, high = cps[i+1], cps[i]
+                for _ in range(35):
                     mid = 0.5 * (low + high)
-                    f_mid = self.rayleigh_lamb_symmetric(mid, omega)
+                    f_mid = self.char_eq_s0(mid, omega)
                     if abs(f_mid) < 1e-6:
-                        break
-                    if np.sign(f_mid) == np.sign(self.rayleigh_lamb_symmetric(low, omega)):
+                        return float(mid)
+                    if np.sign(f_mid) == np.sign(self.char_eq_s0(low, omega)):
                         low = mid
                     else:
                         high = mid
-                cand = 0.5 * (low + high)
-                dist = abs(cand - c_plate)
-                if dist < min_dist_to_cplate:
-                    min_dist_to_cplate = dist
-                    best_cp = cand
-
-        return float(best_cp)
+                return float(0.5 * (low + high))
+                
+        return float(c_plate)
 
     def find_phase_velocity_a0(self, freq_hz: float) -> float:
-        """
-        Compute phase velocity cp for fundamental antisymmetric mode A0 at frequency freq_hz.
-        At low frequencies, A0 is highly dispersive with cp proportional to sqrt(omega).
-        """
+        """Compute phase velocity cp for fundamental antisymmetric mode A0 at frequency freq_hz."""
         if freq_hz <= 10.0:
             return 100.0
             
         omega = 2.0 * np.pi * freq_hz
-        # Analytical thin plate flexural wave estimate as initial anchor:
-        # cp_flexural = (D / (rho * d))^(1/4) * sqrt(omega)
-        d = self.thickness_m
-        E = self.material.youngs_modulus
-        rho = self.material.density
-        nu = self.material.poissons_ratio
-        D = (E * d**3) / (12.0 * (1.0 - nu**2))
-        cp_est = ((D / (rho * d))**0.25) * np.sqrt(omega)
+        # Analytical thin plate flexural wave estimate as lower bracket
+        D = (self.material.youngs_modulus * self.thickness_m**3) / (12.0 * (1.0 - self.material.poissons_ratio**2))
+        cp_est = ((D / (self.material.density * self.thickness_m))**0.25) * np.sqrt(omega)
         
-        cp_min = max(cp_est * 0.5, 100.0)
-        cp_max = min(max(cp_est * 1.5, self.cT * 0.95), self.cT * 1.05)
+        cp_min = max(cp_est * 0.4, 150.0)
+        cp_max = self.cR * 0.999
         
         cps = np.linspace(cp_min, cp_max, 150)
-        vals = [self.rayleigh_lamb_antisymmetric(c, omega) for c in cps]
+        vals = [self.char_eq_a0(c, omega) for c in cps]
         
-        best_cp = cp_est
-        min_err = float('inf')
         for i in range(len(cps) - 1):
-            if np.sign(vals[i]) != np.sign(vals[i+1]) and abs(vals[i] - vals[i+1]) < 50.0:
+            if np.sign(vals[i]) != np.sign(vals[i+1]) and abs(vals[i] - vals[i+1]) < 30.0:
                 low, high = cps[i], cps[i+1]
-                for _ in range(30):
+                for _ in range(35):
                     mid = 0.5 * (low + high)
-                    f_mid = self.rayleigh_lamb_antisymmetric(mid, omega)
+                    f_mid = self.char_eq_a0(mid, omega)
                     if abs(f_mid) < 1e-6:
-                        break
-                    if np.sign(f_mid) == np.sign(vals[i]):
+                        return float(mid)
+                    if np.sign(f_mid) == np.sign(self.char_eq_a0(low, omega)):
                         low = mid
                     else:
                         high = mid
-                cand = 0.5 * (low + high)
-                err = abs(self.rayleigh_lamb_antisymmetric(cand, omega))
-                if err < min_err:
-                    min_err = err
-                    best_cp = cand
-
-        return float(best_cp)
+                return float(0.5 * (low + high))
+                
+        return float(cp_est)
 
     def compute_dispersion_curve(
         self, freq_range_hz: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Compute phase and group velocities for S0 and A0 across frequencies.
-        Returns:
-            (cp_s0, cg_s0, cp_a0, cg_a0)
-        Group velocity cg = d(omega) / d(k) = cp / (1 - (omega / cp) * (d cp / d omega)).
-        """
+        """Compute phase and group velocities for S0 and A0 across frequencies."""
         freqs = np.asarray(freq_range_hz, dtype=np.float64)
         cp_s0 = np.array([self.find_phase_velocity_s0(f) for f in freqs])
         cp_a0 = np.array([self.find_phase_velocity_a0(f) for f in freqs])
         
-        # Numerical group velocities cg = d_omega / d_k
         omega = 2.0 * np.pi * freqs
         k_s0 = omega / cp_s0
         k_a0 = omega / cp_a0
         
         cg_s0 = np.gradient(omega, k_s0)
         cg_a0 = np.gradient(omega, k_a0)
-        
-        # Clean any numerical spikes at endpoints
-        cg_s0 = np.clip(cg_s0, 0.5 * self.cT, 1.2 * self.material.c_plate_s0_limit)
-        cg_a0 = np.clip(cg_a0, 100.0, 1.2 * self.cT)
         
         return cp_s0, cg_s0, cp_a0, cg_a0

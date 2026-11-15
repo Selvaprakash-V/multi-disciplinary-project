@@ -39,3 +39,4 @@ def export_json_schemas(output_dir: Path) -> Dict[str, Path]:
         exported_files[name] = file_path
 
     return exported_files
+

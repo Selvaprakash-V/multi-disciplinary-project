@@ -31,3 +31,4 @@ __all__ = [
     "export_json_schemas",
     "SCHEMA_REGISTRY",
 ]
+

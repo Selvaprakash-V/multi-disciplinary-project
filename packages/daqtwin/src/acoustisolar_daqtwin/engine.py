@@ -76,3 +76,4 @@ class DAQDigitalTwin:
             "windowed_counts": windowed_counts,
             "windowed_volts": windowed_volts,
         }
+

@@ -70,3 +70,4 @@ class TriggerEngine:
         
         window[:, dst_start:dst_end] = waveforms[:, src_start:src_end]
         return window
+

@@ -8,3 +8,4 @@ energy_arbitrary: 1.0
 rise_time_us: 1.5
 duration_us: 25.0
 orientation_deg: 45.0
+

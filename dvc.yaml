@@ -1,0 +1,29 @@
+stages:
+  physics_verification:
+    cmd: python validation/verify_physics.py
+    deps:
+      - packages/physics/src
+      - packages/schemas/src
+      - validation/verify_physics.py
+    outs:
+      - validation/physics_verification_results.json:
+          cache: false
+
+  benchmark_kpi_20k:
+    cmd: python -u validation/run_scale_kpi_benchmark.py
+    deps:
+      - packages/physics/src
+      - packages/daqtwin/src
+      - packages/dsp/src
+      - packages/ml/src
+      - validation/run_scale_kpi_benchmark.py
+    outs:
+      - data/benchmark_20k/events.parquet
+      - data/benchmark_20k/waveforms.npz
+
+  property_invariants:
+    cmd: pytest tests/test_property_invariants.py
+    deps:
+      - tests/test_property_invariants.py
+      - packages/physics/src
+

@@ -17,3 +17,4 @@ def compute_config_hash(model: BaseModel) -> str:
     """Compute a reproducible SHA-256 hash of a Pydantic model configuration."""
     canonical_str = canonical_json_dump(model)
     return hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
+

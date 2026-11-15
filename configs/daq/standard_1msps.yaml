@@ -14,3 +14,4 @@ trigger:
   pre_samples: 512
   post_samples: 2048
   dead_time_us: 500.0
+

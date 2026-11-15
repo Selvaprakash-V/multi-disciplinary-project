@@ -55,3 +55,4 @@ class ADCTwin:
         """Convert raw ADC counts back to calibrated input voltage (V)."""
         counts = np.asarray(counts, dtype=np.float64)
         return (counts * self.lsb_volts) - (self.v_fs / 2.0)
+

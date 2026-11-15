@@ -32,3 +32,4 @@ class DAQConfig(BaseModel):
     preamp: PreampConfig = Field(default_factory=PreampConfig)
     adc: ADCConfig = Field(default_factory=ADCConfig)
     trigger: TriggerConfig = Field(default_factory=TriggerConfig)
+

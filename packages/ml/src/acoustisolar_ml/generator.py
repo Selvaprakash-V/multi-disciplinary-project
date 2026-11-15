@@ -32,6 +32,19 @@ class DatasetGenerator:
         self.seed = seed
         self.config_hash = compute_config_hash(self.module_config)
         self.feature_extractor = AEFeatureExtractor(sample_rate_hz=self.daq_config.adc.rate_hz)
+        
+        # Instantiate simulation and DAQ engines once to avoid re-solving dispersion curves per event
+        self.sim = Tier0Simulator(
+            module_config=self.module_config,
+            sensor_config=self.sensor_config,
+            sample_rate_hz=self.daq_config.adc.rate_hz,
+            n_samples=self.daq_config.trigger.total_samples,
+        )
+        self.daq_twin = DAQDigitalTwin(
+            daq_config=self.daq_config,
+            sensor_config=self.sensor_config,
+            seed=self.seed,
+        )
 
     def generate_event(
         self,
@@ -81,22 +94,11 @@ class DatasetGenerator:
         )
 
         # 1. Physics simulation (Tier-0)
-        sim = Tier0Simulator(
-            module_config=self.module_config,
-            sensor_config=self.sensor_config,
-            sample_rate_hz=self.daq_config.adc.rate_hz,
-            n_samples=self.daq_config.trigger.total_samples,
-        )
-        mech_waves = sim.simulate(src_cfg, temperature_c=temperature, rng=rng)
+        mech_waves = self.sim.simulate(src_cfg, temperature_c=temperature, rng=rng)
 
         # 2. DAQ Twin processing
-        daq_twin = DAQDigitalTwin(
-            daq_config=self.daq_config,
-            sensor_config=self.sensor_config,
-            seed=self.seed + event_id,
-        )
         channel_skew = np.array([float(rng.uniform(-10.0, 10.0)) for _ in range(self.sensor_config.count)])
-        daq_out = daq_twin.process_mechanical_waves(mech_waves, channel_skew_ns=channel_skew)
+        daq_out = self.daq_twin.process_mechanical_waves(mech_waves, channel_skew_ns=channel_skew)
 
         calibrated_volts = daq_out["calibrated_volts"]
         

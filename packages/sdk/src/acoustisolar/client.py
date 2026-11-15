@@ -91,3 +91,4 @@ class AcoustiSolar:
         """Run leakage-free generalization evaluation across held-out module configurations."""
         evaluator = HeldOutEvaluator(seed=self.seed)
         return evaluator.run_held_out_benchmark(n_train=n_train, n_test=n_test)
+

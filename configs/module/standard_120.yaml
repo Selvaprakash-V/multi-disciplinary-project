@@ -47,3 +47,4 @@ stack:
     poissons_ratio: 0.35
     damping_ratio: 0.03
     material_model: "isotropic_elastic"
+

@@ -179,3 +179,4 @@ class Tier1WaveSolver:
             "meets_target_arrival": bool(np.mean(arrival_errs) < 0.05), # < 5% target
             "meets_target_spectral": bool(np.mean(spec_errs) < 0.20),   # < 20% target
         }
+

@@ -38,3 +38,4 @@ class SourceEventConfig(BaseModel):
     rise_time_us: float = Field(default=1.5, gt=0.0, description="Source moment-tensor rise time in microseconds")
     duration_us: float = Field(default=25.0, gt=0.0, description="Source active pulse duration in microseconds")
     orientation_deg: float = Field(default=45.0, description="Crack orientation angle relative to cell busbars in degrees")
+

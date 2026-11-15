@@ -23,3 +23,4 @@
 - **Context:** PRD requirement SIM-01 and Section 8.2 mandate that every simulated event and dataset is bit-reproducible from seed, code version, and config hash.
 - **Decision:** Implement canonical JSON serialization with sorted keys and SHA-256 hashing in `acoustisolar_schemas.hashing`.
 - **Consequence:** Ensures identical config hashes across systems and platforms.
+

@@ -140,3 +140,4 @@ if __name__ == "__main__":
     rep = run_vv_suite()
     if rep["summary"] != "ALL_PASS":
         sys.exit(1)
+

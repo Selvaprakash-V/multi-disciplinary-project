@@ -91,3 +91,4 @@ class AEFeatureExtractor:
                 f.peak_freq_khz,
             ])
         return np.array(feats, dtype=np.float32)
+

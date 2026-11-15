@@ -127,10 +127,12 @@ class MultilayerSAFESolver:
         Returns sorted frequencies in Hz: freq_hz = omega / (2 * pi).
         """
         K, M = self.assemble_matrices(k)
-        # Solve generalized eigenvalue problem: K * v = omega^2 * M * v
-        # Since M is symmetric positive definite and K is Hermitian:
-        eigvals = np.linalg.eigvalsh(np.linalg.solve(M, K))
-        # Keep positive eigenvalues
+        try:
+            from scipy.linalg import eigh
+            eigvals = eigh(K, M, eigvals_only=True)
+        except ImportError:
+            eigvals = np.linalg.eigvalsh(np.linalg.solve(M, K))
+            
         valid_eigvals = np.real(eigvals[eigvals > 0])
         valid_eigvals.sort()
         omegas = np.sqrt(valid_eigvals[:n_modes])
@@ -164,3 +166,4 @@ class MultilayerSAFESolver:
                 cp_s0.append(0.0)
                 
         return np.array(f_s0), np.array(cp_s0), np.array(f_a0), np.array(cp_a0)
+

@@ -125,3 +125,4 @@ class SourceLibrary:
 
         else: # WHITE_NOISE
             return rng.normal(0, 0.2, n) * energy
+

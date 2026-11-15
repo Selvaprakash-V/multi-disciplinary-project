@@ -74,3 +74,4 @@ class Waveform1DResNet:
     def predict(self, x: np.ndarray, threshold: float = 0.5) -> np.ndarray:
         probs = self.forward(x)
         return (probs >= threshold).astype(int)
+

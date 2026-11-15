@@ -52,3 +52,4 @@ class AnalogFrontEnd:
                 V_fft = np.fft.rfft(v_total) * H_filter
                 v_out[ch] = np.fft.irfft(V_fft, n=n)
             return v_out
+

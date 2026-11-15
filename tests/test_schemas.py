@@ -68,3 +68,4 @@ def test_export_json_schemas():
         assert "ModuleTwinConfig" in exported
         assert "EventRecord" in exported
         assert (Path(tmpdir) / "ModuleTwinConfig.json").exists()
+

@@ -42,3 +42,4 @@ jobs:
           PYTHONPATH: packages/schemas/src:packages/physics/src:packages/daqtwin/src:packages/dsp/src:packages/ml/src:packages/sdk/src
         run: |
           python validation/run_vv_suite.py
+

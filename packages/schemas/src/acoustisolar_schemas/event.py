@@ -52,3 +52,4 @@ class EventRecord(BaseModel):
     trigger_features: TriggerFeatures
     label: Optional[GroundTruthLabel] = None
     provenance: ProvenanceRecord
+

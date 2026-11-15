@@ -42,3 +42,4 @@ class ModuleTwinConfig(BaseModel):
 
     def total_thickness_mm(self) -> float:
         return sum(layer.thickness_mm for layer in self.stack)
+

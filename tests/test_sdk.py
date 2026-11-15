@@ -15,3 +15,4 @@ def test_sdk_generate_dataset():
     waves, df = client.generate_synthetic_dataset(n_events=4)
     assert waves.shape[0] == 4
     assert len(df) == 4
+

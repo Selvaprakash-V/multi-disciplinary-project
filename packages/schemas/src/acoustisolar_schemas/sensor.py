@@ -25,3 +25,4 @@ class SensorArrayConfig(BaseModel):
         description="List of (x, y) coordinates for each sensor in millimeters"
     )
     disc: PZTDiscConfig = Field(default_factory=PZTDiscConfig)
+

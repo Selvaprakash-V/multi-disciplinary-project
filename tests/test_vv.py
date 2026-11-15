@@ -6,3 +6,4 @@ def test_full_vv_suite():
     assert report["summary"] == "ALL_PASS"
     assert report["tests"]["dispersion_verification"]["status"] == "PASS"
     assert report["tests"]["energy_cfl_stability"]["status"] == "PASS"
+

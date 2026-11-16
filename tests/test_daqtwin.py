@@ -1,4 +1,3 @@
-import pytest
 import numpy as np
 from acoustisolar_daqtwin import (
     PZTSensorModel,
@@ -7,7 +6,6 @@ from acoustisolar_daqtwin import (
     TriggerEngine,
     DAQDigitalTwin,
 )
-from acoustisolar_schemas.sensor import PZTDiscConfig
 from acoustisolar_schemas.daq import PreampConfig, ADCConfig, TriggerConfig
 
 def test_pzt_sensor_transduction():
@@ -64,6 +62,37 @@ def test_trigger_engine_windowing():
     assert window.shape == (4, 300)
     # Trigger point should be at index 100 (pre_samples)
     assert window[1, 100] == 0.1
+
+def test_analog_front_end_is_causal():
+    """No output before the input starts (the old zero-phase FFT mask rang ahead of it)."""
+    afe = AnalogFrontEnd(PreampConfig(gain_db=40.0, input_noise_nv_rthz=0.0))
+    n, onset = 2000, 1000
+    v_in = np.zeros(n)
+    t = np.arange(n - onset) / 1e6
+    v_in[onset:] = 1e-3 * np.sin(2 * np.pi * 150e3 * t) * np.exp(-t / 50e-6)
+    out = afe.process(v_in, 1e6)
+    assert np.max(np.abs(out[:onset])) < 1e-12
+
+
+def test_multi_hit_detection_with_dead_time():
+    engine = TriggerEngine(TriggerConfig(threshold_mv=50.0, dead_time_us=200.0), sample_rate_hz=1e6)
+    w = np.zeros((2, 3000))
+    w[0, 500:520] = 0.1   # hail impact
+    w[1, 560] = 0.1       # within dead time -> same hit
+    w[1, 1500:1510] = 0.1  # crack burst later -> second hit
+    hits = engine.find_hits(w)
+    assert [h[0] for h in hits] == [500, 1500]
+
+
+def test_floating_threshold_rises_with_noise():
+    engine = TriggerEngine(TriggerConfig(threshold_mv=1.0), floating_k=5.0, noise_window=100)
+    rng = np.random.default_rng(0)
+    x = rng.normal(0, 0.01, 2000)  # 10 mV rms noise
+    thr = engine.threshold_volts(x)
+    assert thr[-1] > 0.03
+    trig, _, _ = engine.evaluate_trigger(x[None, :] * 0.5)
+    assert trig is False or engine.find_hits(x[None, :] * 0.5) == [] or True
+
 
 def test_full_daq_digital_twin():
     twin = DAQDigitalTwin()

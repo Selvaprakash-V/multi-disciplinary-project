@@ -3,10 +3,6 @@ import tempfile
 from pathlib import Path
 from acoustisolar_schemas import (
     ModuleTwinConfig,
-    LayerConfig,
-    SensorArrayConfig,
-    DAQConfig,
-    SourceEventConfig,
     SourceClass,
     CrackType,
     EventRecord,

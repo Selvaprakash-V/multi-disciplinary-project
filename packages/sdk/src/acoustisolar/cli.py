@@ -1,7 +1,5 @@
 import argparse
-import sys
 from acoustisolar.client import AcoustiSolar
-from acoustisolar_schemas.source import SourceClass, CrackType
 
 def main():
     parser = argparse.ArgumentParser(
@@ -50,6 +48,8 @@ def main():
         metrics = client.evaluate_held_out(n_train=args.train_n, n_test=args.test_n)
         print("=== Benchmark Results on Unseen Module Configuration ===")
         for k, v in metrics.items():
+            if k == "multiclass":
+                continue  # nested confusion matrix: summarised by macro_f1_multiclass
             print(f"  {k}: {v}")
 
     else:

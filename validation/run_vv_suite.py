@@ -1,143 +1,219 @@
 """
-Automated Verification & Validation (V&V) Suite for AcoustiSolar
-Asserts scientific invariants, multi-fidelity gaps, and generalization performance.
+Automated Verification & Validation (V&V) suite for AcoustiSolar.
+
+Every check computes a real quantity and compares it with a tolerance.  Status values:
+* PASS / FAIL      — verification checks (the code does what the physics says)
+* KNOWN_GAP        — a product KPI target that the current simulation-only system does not
+                     yet meet; reported honestly, does not fail CI
+Results go to ``validation/out/`` (the curated ``VV_REPORT.md`` is never overwritten).
+
+History: an earlier version compared random noise with itself as the "Tier-0 vs Tier-1
+gap", hard-coded PASS for reciprocity and grid convergence, and overwrote the report.
 """
 
-import sys
 import json
-import numpy as np
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
-# Add package paths
-root = Path(__file__).parent.parent
-sys.path.insert(0, str(root / "packages" / "schemas" / "src"))
-sys.path.insert(0, str(root / "packages" / "physics" / "src"))
-sys.path.insert(0, str(root / "packages" / "daqtwin" / "src"))
-sys.path.insert(0, str(root / "packages" / "dsp" / "src"))
-sys.path.insert(0, str(root / "packages" / "ml" / "src"))
-sys.path.insert(0, str(root / "packages" / "sdk" / "src"))
+import numpy as np
 
-from acoustisolar_physics.materials import GLASS_MATERIAL
-from acoustisolar_physics.lamb import LambDispersionSolver
-from acoustisolar_physics.safe import MultilayerSAFESolver
-from acoustisolar_physics.tier0 import Tier0Simulator
-from acoustisolar_physics.tier1 import Tier1WaveSolver
-from acoustisolar_schemas.source import SourceEventConfig, SourceClass
-from acoustisolar_ml.evaluation import HeldOutEvaluator
+root = Path(__file__).resolve().parent.parent
+for pkg in ("schemas", "physics", "daqtwin", "dsp", "ml", "sdk"):
+    sys.path.insert(0, str(root / "packages" / pkg / "src"))
+sys.path.insert(0, str(root / "validation"))
 
-def run_vv_suite() -> dict:
-    report = {
-        "timestamp_utc": "2026-11-15T01:30:00Z",
-        "tests": {},
-        "summary": "PASS",
-    }
+from acoustisolar_physics.lamb import LambDispersionSolver  # noqa: E402
+from acoustisolar_physics.materials import GLASS_MATERIAL  # noqa: E402
+from acoustisolar_physics.safe import MultilayerSAFESolver  # noqa: E402
+from acoustisolar_physics.tier0 import Tier0Simulator, laminate_for_module  # noqa: E402
+from acoustisolar_physics.tier1 import Tier1WaveSolver  # noqa: E402
+from acoustisolar_schemas.module import ModuleTwinConfig  # noqa: E402
+from acoustisolar_schemas.source import SourceEventConfig  # noqa: E402
 
-    print("=== [1/6] Running Dispersion Curve Analytical Verification ===")
-    lamb_solver = LambDispersionSolver(thickness_m=3.2e-3)
-    f_test = 50.0e3
-    cp_s0 = lamb_solver.find_phase_velocity_s0(f_test)
-    c_lim = GLASS_MATERIAL.c_plate_s0_limit
-    disp_err_pct = float(abs(cp_s0 - c_lim) / c_lim * 100.0)
-    print(f"  S0 phase velocity at 50 kHz: {cp_s0:.1f} m/s (Limit: {c_lim:.1f} m/s, Err: {disp_err_pct:.2f}%)")
-    report["tests"]["dispersion_verification"] = {
-        "status": "PASS" if disp_err_pct < 2.0 else "FAIL",
-        "error_pct": disp_err_pct,
-    }
+OUT_DIR = root / "validation" / "out"
 
-    print("=== [2/6] Running Acoustic Reciprocity Check ===")
+
+def _status(ok: bool) -> str:
+    return "PASS" if ok else "FAIL"
+
+
+def check_lamb_vs_independent_reference() -> dict:
+    from verify_physics import independent_lamb_reference
+
+    solver = LambDispersionSolver(thickness_m=3.2e-3)
+    errs = []
+    for f in (50e3, 150e3, 300e3):
+        for mode, fn in (("S0", solver.find_phase_velocity_s0), ("A0", solver.find_phase_velocity_a0)):
+            ref = independent_lamb_reference(f, 3.2e-3, GLASS_MATERIAL.c_longitudinal, GLASS_MATERIAL.c_transverse, mode)
+            errs.append(abs(fn(f) - ref) / ref * 100.0)
+    return {"status": _status(max(errs) < 1.0), "max_error_pct": float(max(errs)), "tolerance_pct": 1.0}
+
+
+def check_safe_single_layer_regression() -> dict:
+    safe = MultilayerSAFESolver(layers=[("glass", 3.2e-3, 2500.0, 72.0e9, 0.22)], n_elem_per_layer=12)
+    lamb = LambDispersionSolver(thickness_m=3.2e-3)
+    errs = []
+    for k in (150.0, 300.0, 600.0):
+        fs, cs, fa, ca = safe.compute_dispersion(np.array([k]))
+        errs.append(abs(cs[0] - lamb.find_phase_velocity_s0(fs[0])) / cs[0] * 100.0)
+        errs.append(abs(ca[0] - lamb.find_phase_velocity_a0(fa[0])) / ca[0] * 100.0)
+    return {"status": _status(max(errs) < 1.5), "max_error_pct": float(max(errs)), "tolerance_pct": 1.5}
+
+
+def check_laminate_s0_physical() -> dict:
+    v = laminate_for_module(ModuleTwinConfig()).s0_velocity(25.0)
+    c_plate = GLASS_MATERIAL.c_plate_s0_limit
+    delta = (v - c_plate) / c_plate * 100.0
+    return {"status": _status(-10.0 < delta < 1.0), "laminate_s0_m_s": float(v), "glass_plate_m_s": float(c_plate),
+            "delta_pct": float(delta), "note": "thin soft layers mass-load the glass by a few % only"}
+
+
+def check_tier0_causality() -> dict:
     sim = Tier0Simulator()
-    # Source at A (300, 500), sensor at B (980, 1640)
-    src_A = SourceEventConfig(x_mm=300.0, y_mm=500.0)
-    w_A = sim.simulate(src_A, rng=np.random.default_rng(42))
-    
-    # Reciprocal source at B (980, 1640), sensor at A
-    # Distance is symmetric
-    dist_AB = np.hypot(300.0 - 980.0, 500.0 - 1640.0)
-    print(f"  Acoustic path distance: {dist_AB:.1f} mm")
-    report["tests"]["reciprocity_check"] = {
-        "status": "PASS",
-        "path_symmetry_confirmed": True,
+    worst = 0.0
+    v_max = sim.laminate.group_velocity_limit("S0")
+    for i, (x, y) in enumerate([(300, 500), (520, 880), (900, 1500)]):
+        w = sim.simulate(SourceEventConfig(x_mm=x, y_mm=y), 25.0, np.random.default_rng(i), onset_s=400e-6)
+        for ch, (sx, sy) in enumerate(sim.sensor_config.positions_mm):
+            t_min = 400e-6 + np.hypot(x - sx, y - sy) * 1e-3 / v_max
+            i0 = int(t_min * 1e6) - 10
+            worst = max(worst, float(np.max(np.abs(w[ch, :i0])) / np.max(np.abs(w[ch]))))
+    return {"status": _status(worst < 1e-6), "max_pre_arrival_ratio": worst}
+
+
+def check_tier1_reciprocity() -> dict:
+    solver = Tier1WaveSolver(width_m=0.4, length_m=0.4, dx_m=0.01, dt_s=1e-6, pml_thickness_cells=6)
+    c = np.full((solver.nx, solver.ny), 5300.0)
+    c[22:30, 10:20] = 3800.0
+    solver.set_c_field(c)
+    t = np.arange(220) * 1e-6
+    f0 = 120e3
+    tau = t - 2.0 / f0
+    src = (1 - 2 * (np.pi * f0 * tau) ** 2) * np.exp(-((np.pi * f0 * tau) ** 2))
+    a, b = (0.12, 0.15), (0.31, 0.30)
+    ab = solver.run_simulation(*a, src, [b])[0][0]
+    ba = solver.run_simulation(*b, src, [a])[0][0]
+    err = float(np.linalg.norm(ab - ba) / np.linalg.norm(ab))
+    return {"status": _status(err < 1e-6), "relative_l2_error": err, "heterogeneous": True}
+
+
+def check_tier1_convergence() -> dict:
+    """Observed order of the FD scheme with a smooth (Gaussian) source, three grids."""
+    c0, f0, sigma = 5300.0, 40e3, 0.012
+    sigs = []
+    t_end = 90e-6
+    t_common = np.linspace(0, t_end, 600)
+    for dx in (0.006, 0.003, 0.0015):
+        dt = 0.4 * dx / c0
+        n = int(t_end / dt) + 1
+        t = np.arange(n) * dt
+        tau = t - 1.5 / f0
+        src = (1 - 2 * (np.pi * f0 * tau) ** 2) * np.exp(-((np.pi * f0 * tau) ** 2))
+        s = Tier1WaveSolver(width_m=0.36, length_m=0.36, dx_m=dx, dt_s=dt, c_speed_m_s=c0, boundary="reflecting")
+        # footprint sums to 1 per cell-area: divide by dx^2 to get a grid-independent field
+        w = s.run_simulation(0.18, 0.18, src, [(0.252, 0.18)], source_sigma_m=sigma)[0][0] / dx**2
+        sigs.append(np.interp(t_common, t, w))
+    e1 = np.linalg.norm(sigs[0] - sigs[1])
+    e2 = np.linalg.norm(sigs[1] - sigs[2])
+    order = float(np.log2(e1 / max(e2, 1e-30)))
+    return {"status": _status(1.5 < order < 2.8), "observed_order": order, "expected_order": 2.0,
+            "points_per_wavelength_finest": float(c0 / (2.5 * f0) / 0.0015)}
+
+
+def check_tier0_tier1_arrival_agreement() -> dict:
+    """Kinematic agreement: wave speed recovered from Tier-1 arrival times vs distance must
+    match the laminate S0 speed that Tier-0 uses (slope fit removes the wavelet offset)."""
+    sim = Tier0Simulator()
+    v = sim.s0_velocity(25.0)
+    dx, dt = 0.004, 0.35e-6
+    t1 = Tier1WaveSolver(width_m=0.7, length_m=0.7, dx_m=dx, dt_s=dt, c_speed_m_s=v, pml_thickness_cells=15)
+    n = 650
+    t = np.arange(n) * dt
+    f0 = 100e3
+    tau = t - 1.5 / f0
+    src = (1 - 2 * (np.pi * f0 * tau) ** 2) * np.exp(-((np.pi * f0 * tau) ** 2))
+    src_xy = (0.12, 0.12)
+    sensors = [(0.24, 0.12), (0.36, 0.12), (0.48, 0.12), (0.12, 0.56)]
+    w1 = t1.run_simulation(*src_xy, src, sensors)[0]
+    d = np.array([np.hypot(sx - src_xy[0], sy - src_xy[1]) for sx, sy in sensors])
+    first = np.array([np.argmax(np.abs(w) > 0.1 * np.max(np.abs(w))) * dt for w in w1])
+    slope = np.polyfit(d, first, 1)[0]
+    v_t1 = 1.0 / slope
+    err = abs(v_t1 - v) / v * 100.0
+    return {"status": _status(err < 3.0), "tier1_speed_m_s": float(v_t1), "tier0_s0_speed_m_s": float(v),
+            "speed_error_pct": float(err), "tolerance_pct": 3.0}
+
+
+def check_ml_held_out() -> dict:
+    from acoustisolar_ml.evaluation import HeldOutEvaluator
+
+    m = HeldOutEvaluator(seed=42).run_held_out_benchmark(n_train=200, n_test=100)
+    targets = {"f1_score": 0.95, "ece_max": 0.05}
+    gaps = []
+    if m["f1_score"] < targets["f1_score"]:
+        gaps.append("new-fracture F1 below PRD target")
+    if m["ece"] > targets["ece_max"]:
+        gaps.append("ECE above PRD target")
+    return {
+        "status": "KNOWN_GAP" if gaps else "PASS",
+        "gaps": gaps,
+        "f1_new_fracture": m["f1_score"],
+        "pr_auc": m["pr_auc"],
+        "ece": m["ece"],
+        "macro_f1_multiclass": m.get("macro_f1_multiclass"),
+        "localization": m.get("localization"),
+        "train_module": m["train_module"],
+        "held_out_module": m["held_out_module"],
+        "note": "small run for CI; see validation/kpi_benchmark_summary.json for the scale benchmark",
     }
 
-    print("=== [3/6] Running Wave Equation Energy Conservation & Stability ===")
-    solver = Tier1WaveSolver(width_m=0.3, length_m=0.3, dx_m=0.015, dt_s=1.5e-6, c_speed_m_s=5300.0)
-    print(f"  CFL Courant stability number: {solver.courant_number:.3f} <= 0.707")
-    report["tests"]["energy_cfl_stability"] = {
-        "status": "PASS" if solver.courant_number <= 0.707 else "FAIL",
-        "courant_number": float(solver.courant_number),
-    }
 
-    print("=== [4/6] Running Grid Convergence Test ===")
-    # Solve at coarse (20mm) and fine (10mm) grid
-    s_coarse = Tier1WaveSolver(width_m=0.3, length_m=0.3, dx_m=0.02, dt_s=2e-6, c_speed_m_s=5300.0)
-    s_fine = Tier1WaveSolver(width_m=0.3, length_m=0.3, dx_m=0.01, dt_s=1e-6, c_speed_m_s=5300.0)
-    print(f"  Grid resolved from {s_coarse.nx}x{s_coarse.ny} to {s_fine.nx}x{s_fine.ny} elements")
-    report["tests"]["grid_convergence"] = {
-        "status": "PASS",
-        "coarse_grid": f"{s_coarse.nx}x{s_coarse.ny}",
-        "fine_grid": f"{s_fine.nx}x{s_fine.ny}",
-    }
+CHECKS = {
+    "lamb_vs_independent_reference": check_lamb_vs_independent_reference,
+    "safe_single_layer_regression": check_safe_single_layer_regression,
+    "laminate_s0_physical": check_laminate_s0_physical,
+    "tier0_causality": check_tier0_causality,
+    "tier1_heterogeneous_reciprocity": check_tier1_reciprocity,
+    "tier1_grid_convergence": check_tier1_convergence,
+    "tier0_tier1_arrival_agreement": check_tier0_tier1_arrival_agreement,
+    "ml_held_out_generalization": check_ml_held_out,
+}
 
-    print("=== [5/6] Multi-Fidelity Gap Analysis (Tier-0 vs Tier-1) ===")
-    n_pts = 100
-    w_t0 = np.random.normal(0, 0.1, (2, n_pts))
-    w_t1 = w_t0 + np.random.normal(0, 0.005, (2, n_pts))
-    gap = solver.compare_fidelity_gap(w_t0, w_t1)
-    print(f"  Arrival Time Error: {gap['arrival_time_error_pct']:.2f}%")
-    print(f"  Spectral Centroid Error: {gap['spectral_centroid_error_pct']:.2f}%")
-    print(f"  Envelope Correlation: {gap['envelope_correlation']:.3f}")
-    report["tests"]["fidelity_gap"] = gap
 
-    print("=== [6/6] Held-out Module Generalization Benchmark (Zero Leakage) ===")
-    evaluator = HeldOutEvaluator(seed=42)
-    ml_metrics = evaluator.run_held_out_benchmark(n_train=30, n_test=15)
-    print(f"  Classification Accuracy: {ml_metrics['accuracy']*100:.1f}%")
-    print(f"  Macro-F1 Score: {ml_metrics['f1_score']:.3f}")
-    print(f"  Expected Calibration Error (ECE): {ml_metrics['ece']:.3f}")
-    report["tests"]["held_out_ml_generalization"] = ml_metrics
+def run_vv_suite(include_ml: bool = True) -> dict:
+    report = {"timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"), "tests": {}}
+    for name, fn in CHECKS.items():
+        if name.startswith("ml_") and not include_ml:
+            continue
+        print(f"=== {name} ===")
+        try:
+            res = fn()
+        except Exception as exc:  # a crash is a failure, never a silent pass
+            res = {"status": "FAIL", "error": repr(exc)}
+        report["tests"][name] = res
+        print(f"  -> {res['status']}  " + ", ".join(f"{k}={v}" for k, v in res.items() if k != "status" and not isinstance(v, (dict, list))))
+    statuses = [t["status"] for t in report["tests"].values()]
+    if "FAIL" in statuses:
+        report["summary"] = "FAILURES_DETECTED"
+    elif "KNOWN_GAP" in statuses:
+        report["summary"] = "PASS_WITH_KNOWN_GAPS"
+    else:
+        report["summary"] = "ALL_PASS"
 
-    # Check overall pass/fail
-    all_pass = all(v.get("status") == "PASS" for k, v in report["tests"].items() if "status" in v)
-    report["summary"] = "ALL_PASS" if all_pass else "FAILURES_DETECTED"
-    
-    # Save markdown report
-    report_md = f"""# AcoustiSolar Verification & Validation (V&V) Report
-
-**Generated:** {report['timestamp_utc']}
-**Overall Status:** {report['summary']}
-
-## 1. Dispersion Curve Analytical Verification
-- **Mode:** S0 Fundamental Symmetric Lamb Mode
-- **Analytical Plate Limit:** {c_lim:.1f} m/s
-- **Calculated at 50 kHz:** {cp_s0:.1f} m/s
-- **Relative Discrepancy:** {disp_err_pct:.3f}% (Tolerance: < 2.0%)
-- **Status:** {report['tests']['dispersion_verification']['status']}
-
-## 2. Dynamic Stability & Conservation
-- **Courant-Friedrichs-Lewy (CFL) Number:** {solver.courant_number:.3f} (Limit: 0.707)
-- **Status:** {report['tests']['energy_cfl_stability']['status']}
-
-## 3. Multi-Fidelity Gap (Tier-0 vs Tier-1)
-- **Arrival Time Error:** {gap['arrival_time_error_pct']:.2f}% (Target: < 3%)
-- **Spectral Centroid Error:** {gap['spectral_centroid_error_pct']:.2f}% (Target: < 15%)
-- **Envelope Correlation:** {gap['envelope_correlation']:.3f}
-
-## 4. Leakage-Free Generalization on Held-Out Module
-- **Training Module:** {ml_metrics['train_module']} (3.2 mm glass, 120 cells)
-- **Held-Out Test Module:** {ml_metrics['held_out_module']} (2.8 mm glass, 144 cells)
-- **Accuracy on Unseen Module:** {ml_metrics['accuracy']*100:.1f}%
-- **Macro-F1 Score:** {ml_metrics['f1_score']:.3f}
-- **Expected Calibration Error (ECE):** {ml_metrics['ece']:.3f} (Target: <= 0.08)
-"""
-    report_file = root / "validation" / "VV_REPORT.md"
-    with open(report_file, "w", encoding="utf-8") as f:
-        f.write(report_md)
-    print(f"\n[OK] V&V Report written to {report_file}")
-    
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    (OUT_DIR / "vv_suite_results.json").write_text(json.dumps(report, indent=2, default=float), encoding="utf-8")
+    lines = [f"# V&V suite results\n\n**Generated:** {report['timestamp_utc']}  \n**Summary:** {report['summary']}\n",
+             "| Check | Status | Key values |", "|---|---|---|"]
+    for name, res in report["tests"].items():
+        vals = ", ".join(f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}"
+                         for k, v in res.items() if k not in ("status", "localization", "gaps", "note"))
+        lines.append(f"| {name} | {res['status']} | {vals} |")
+    (OUT_DIR / "vv_suite_results.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"\nSummary: {report['summary']}  (written to {OUT_DIR})")
     return report
+
 
 if __name__ == "__main__":
     rep = run_vv_suite()
-    if rep["summary"] != "ALL_PASS":
-        sys.exit(1)
-
+    sys.exit(1 if rep["summary"] == "FAILURES_DETECTED" else 0)

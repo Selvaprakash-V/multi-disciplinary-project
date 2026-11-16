@@ -8,8 +8,6 @@ import hashlib
 import json
 import subprocess
 import numpy as np
-import pyarrow as pa
-import pyarrow.parquet as pq
 from pathlib import Path
 
 from acoustisolar_schemas.module import ModuleTwinConfig
@@ -28,7 +26,7 @@ def run_bit_reproducibility_test(seed: int = 9999, n_events: int = 200) -> dict:
     cfg_hash = compute_config_hash(cfg)
     code_sha = get_git_code_sha()
     
-    print(f"=== Running Bit-Reproducibility Verification ===")
+    print("=== Running Bit-Reproducibility Verification ===")
     print(f"  Config Hash: {cfg_hash}")
     print(f"  Code Git SHA: {code_sha}")
     print(f"  Random Seed: {seed}")

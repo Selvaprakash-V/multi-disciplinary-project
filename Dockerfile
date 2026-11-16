@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml .
 RUN pip install --upgrade pip && \
-    pip install numpy pandas pydantic pyyaml pytest pytest-cov ruff mypy matplotlib
+    pip install numpy scipy pandas pydantic pyyaml scikit-learn joblib pyarrow pytest pytest-cov ruff mypy matplotlib
 
 COPY . .
 

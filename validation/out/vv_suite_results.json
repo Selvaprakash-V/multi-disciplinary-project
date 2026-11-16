@@ -1,0 +1,45 @@
+{
+  "timestamp_utc": "2026-11-16T04:52:52+00:00",
+  "tests": {
+    "lamb_vs_independent_reference": {
+      "status": "PASS",
+      "max_error_pct": 0.004656444761585984,
+      "tolerance_pct": 1.0
+    },
+    "safe_single_layer_regression": {
+      "status": "PASS",
+      "max_error_pct": 0.08175937978696837,
+      "tolerance_pct": 1.5
+    },
+    "laminate_s0_physical": {
+      "status": "PASS",
+      "laminate_s0_m_s": 5491.064422630838,
+      "glass_plate_m_s": 5501.346848732867,
+      "delta_pct": -0.18690743166644672,
+      "note": "thin soft layers mass-load the glass by a few % only"
+    },
+    "tier0_causality": {
+      "status": "PASS",
+      "max_pre_arrival_ratio": 0.0
+    },
+    "tier1_heterogeneous_reciprocity": {
+      "status": "PASS",
+      "relative_l2_error": 1.1553161582542738e-15,
+      "heterogeneous": true
+    },
+    "tier1_grid_convergence": {
+      "status": "PASS",
+      "observed_order": 1.9300007756329893,
+      "expected_order": 2.0,
+      "points_per_wavelength_finest": 35.33333333333333
+    },
+    "tier0_tier1_arrival_agreement": {
+      "status": "PASS",
+      "tier1_speed_m_s": 5472.312703583062,
+      "tier0_s0_speed_m_s": 5491.064422630838,
+      "speed_error_pct": 0.3414951565764264,
+      "tolerance_pct": 3.0
+    }
+  },
+  "summary": "ALL_PASS"
+}

@@ -21,7 +21,6 @@ wheels/
 *.egg
 
 # Virtual environments
-.env
 .venv
 env/
 venv/
@@ -51,9 +50,10 @@ mlruns/
 
 # IDE & OS
 .idea/
-.vscode/
 *.swp
 *.swo
 .DS_Store
 Thumbs.db
 
+config.bat
+node_modules

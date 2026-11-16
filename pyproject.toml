@@ -42,6 +42,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = [
+    ".",                      # repository root, so tests can import validation/*
     "packages/schemas/src",
     "packages/physics/src",
     "packages/daqtwin/src",

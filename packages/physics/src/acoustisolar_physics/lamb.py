@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Tuple, List
+from typing import Tuple
 from .materials import IsotropicMaterial, GLASS_MATERIAL
 
 class LambDispersionSolver:

@@ -1,367 +1,283 @@
 """
-AcoustiSolar Large-Scale KPI Benchmark Suite (PRD 9.5 & 14.1)
-Generates >= 20,000 events across 5 distinct physical module configurations.
-Evaluates LightGBM and 1D-ResNet on held-out modules with zero leakage and bootstrap CIs.
-Saves data directly to Zarr waveforms + Parquet metadata index.
+Scale KPI benchmark with strict module-level splits (PRD §9.5, §14.1).
+
+* 5 physically distinct module designs; train on MOD-1..3, test on unseen MOD-4/5.
+  Tier-0 consumes each module's full stack (glass, EVA/POE viscoelasticity, size) and
+  sensors sit at each module's corners.  MOD-5 runs hot (55-75 C).
+* Models: gradient-boosted trees on engineered features (+ temperature scaling, split
+  conformal sets) and a trainable 1D residual CNN on waveforms (if PyTorch is available).
+* Open-set test: the classifier and the Mahalanobis "unknown source" detector are trained
+  without one source type, which then appears only at test time.
+* Detection: untriggered crack events count as missed detections.  Recall at <= 1 false
+  alarm per module-day uses a Generalised-Pareto tail fit on noise-event scores; the
+  trigger-rate assumption (noise triggers per module-day) is [UNSOURCED].
+* Localisation on held-out crack events; Tier-1 localisation with a correct setup
+  (reflecting frame edges, sensors outside any absorber, >= 10 points per wavelength).
+
+Outputs: validation/kpi_benchmark_summary.json (tracked), models/ae_feature_classifier.joblib
+(+ .sha256), models/waveform_resnet.pt, data/benchmark_20k/* (git-ignored raw data).
 """
 
+import argparse
+import json
 import sys
-import os
-import pyarrow as pa
-import pyarrow.parquet as pq
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from lightgbm import LGBMClassifier
-from sklearn.metrics import confusion_matrix, precision_recall_curve
 
-root = Path(__file__).parent.parent
-sys.path.insert(0, str(root / "packages" / "schemas" / "src"))
-sys.path.insert(0, str(root / "packages" / "physics" / "src"))
-sys.path.insert(0, str(root / "packages" / "daqtwin" / "src"))
-sys.path.insert(0, str(root / "packages" / "dsp" / "src"))
-sys.path.insert(0, str(root / "packages" / "ml" / "src"))
-sys.path.insert(0, str(root / "packages" / "sdk" / "src"))
+root = Path(__file__).resolve().parent.parent
+for pkg in ("schemas", "physics", "daqtwin", "dsp", "ml", "sdk"):
+    sys.path.insert(0, str(root / "packages" / pkg / "src"))
 
-from acoustisolar_schemas.module import ModuleTwinConfig, LayerConfig, ModuleLayoutConfig
-from acoustisolar_schemas.source import SourceClass, CrackType, NoiseClass
-from acoustisolar_ml.generator import DatasetGenerator
-from acoustisolar_ml.deep_model import Waveform1DResNet
-from acoustisolar_ml.metrics import compute_classification_metrics
-from acoustisolar_dsp.tdoa import TDOALocalizer
+from acoustisolar_dsp.tdoa import TDOALocalizer  # noqa: E402
+from acoustisolar_ml.baseline_model import AEFeatureClassifier  # noqa: E402
+from acoustisolar_ml.calibration import ConformalClassifier, TemperatureScaler  # noqa: E402
+from acoustisolar_ml.generator import DatasetGenerator, feature_matrix, label_vector  # noqa: E402
+from acoustisolar_ml.metrics import (  # noqa: E402
+    bootstrap_ci,
+    compute_classification_metrics,
+    compute_localization_metrics,
+    evt_threshold,
+    multiclass_ece,
+    multiclass_metrics,
+)
+from acoustisolar_ml.ood import MahalanobisOOD  # noqa: E402
+from acoustisolar_physics.tier1 import Tier1WaveSolver  # noqa: E402
+from acoustisolar_schemas.event import EVENT_CLASSES  # noqa: E402
+from acoustisolar_schemas.module import LayerConfig, ModuleLayoutConfig, ModuleTwinConfig  # noqa: E402
 
-def get_5_module_configs():
-    """Define 5 physically distinct module configurations for zero-leakage benchmark."""
-    # Mod 1: Standard 120 Half-Cut PERC (3.2 mm glass)
+NOISE_TRIGGERS_PER_MODULE_DAY = 10_000  # [UNSOURCED] — replace with field logging (ASSUMPTIONS §4A-3)
+TARGETS = {"recall_at_1_far": 0.98, "macro_f1": 0.95, "loc_median_mm": 15.0, "loc_p90_mm": 40.0,
+           "cell_id_accuracy": 0.95, "ece": 0.05}
+
+
+def _visco(name, t, rho, e_gpa, nu, temp=25.0):
+    return LayerConfig(name=name, thickness_mm=t, density_kg_m3=rho, youngs_modulus_gpa=e_gpa, poissons_ratio=nu,
+                       material_model="viscoelastic_prony", damping_ratio=0.15, temperature_c=temp)
+
+
+def module_configs():
     mod1 = ModuleTwinConfig(module_id="MOD-1-STD120", width_mm=1040.0, length_mm=1760.0)
-    
-    # Mod 2: Large Format 144 Half-Cut TOPCon (2.8 mm glass)
     mod2 = ModuleTwinConfig(
-        module_id="MOD-2-LARGE144",
-        width_mm=1134.0, length_mm=2278.0,
+        module_id="MOD-2-LARGE144", width_mm=1134.0, length_mm=2278.0,
         layout=ModuleLayoutConfig(cells=144, rows=24, cols=6, cell_size="G12"),
-        stack=[
-            LayerConfig(name="glass", thickness_mm=2.8, density_kg_m3=2500.0, youngs_modulus_gpa=74.0, poissons_ratio=0.21),
-            LayerConfig(name="eva_front", thickness_mm=0.50, density_kg_m3=960.0, youngs_modulus_gpa=0.015, poissons_ratio=0.45),
-            LayerConfig(name="si_cell", thickness_mm=0.150, density_kg_m3=2330.0, youngs_modulus_gpa=130.0, poissons_ratio=0.28),
-            LayerConfig(name="eva_back", thickness_mm=0.50, density_kg_m3=960.0, youngs_modulus_gpa=0.015, poissons_ratio=0.45),
-            LayerConfig(name="backsheet", thickness_mm=0.35, density_kg_m3=1200.0, youngs_modulus_gpa=3.8, poissons_ratio=0.35),
-        ]
-    )
-    
-    # Mod 3: Utility 60 Full-Cell Mono (4.0 mm heavy glass)
+        stack=[LayerConfig(name="glass", thickness_mm=2.8, density_kg_m3=2500.0, youngs_modulus_gpa=74.0, poissons_ratio=0.21),
+               _visco("eva_front", 0.50, 960.0, 0.015, 0.45),
+               LayerConfig(name="si_cell", thickness_mm=0.150, density_kg_m3=2330.0, youngs_modulus_gpa=130.0, poissons_ratio=0.28),
+               _visco("eva_back", 0.50, 960.0, 0.015, 0.45),
+               LayerConfig(name="backsheet", thickness_mm=0.35, density_kg_m3=1200.0, youngs_modulus_gpa=3.8, poissons_ratio=0.35)])
     mod3 = ModuleTwinConfig(
-        module_id="MOD-3-UTIL60",
-        width_mm=992.0, length_mm=1650.0,
+        module_id="MOD-3-UTIL60", width_mm=992.0, length_mm=1650.0,
         layout=ModuleLayoutConfig(cells=60, half_cut=False, rows=10, cols=6, cell_size="M6"),
-        stack=[
-            LayerConfig(name="glass", thickness_mm=4.0, density_kg_m3=2500.0, youngs_modulus_gpa=72.0, poissons_ratio=0.22),
-            LayerConfig(name="eva_front", thickness_mm=0.45, density_kg_m3=960.0, youngs_modulus_gpa=0.0125, poissons_ratio=0.45),
-            LayerConfig(name="si_cell", thickness_mm=0.200, density_kg_m3=2330.0, youngs_modulus_gpa=130.0, poissons_ratio=0.28),
-            LayerConfig(name="eva_back", thickness_mm=0.45, density_kg_m3=960.0, youngs_modulus_gpa=0.0125, poissons_ratio=0.45),
-            LayerConfig(name="backsheet", thickness_mm=0.30, density_kg_m3=1200.0, youngs_modulus_gpa=3.5, poissons_ratio=0.35),
-        ]
-    )
-    
-    # Mod 4: Glass-Glass Bifacial 72-Cell (2.0 mm thin glass front & rear) - HELD OUT
+        stack=[LayerConfig(name="glass", thickness_mm=4.0, density_kg_m3=2500.0, youngs_modulus_gpa=72.0, poissons_ratio=0.22),
+               _visco("eva_front", 0.45, 960.0, 0.0125, 0.45),
+               LayerConfig(name="si_cell", thickness_mm=0.200, density_kg_m3=2330.0, youngs_modulus_gpa=130.0, poissons_ratio=0.28),
+               _visco("eva_back", 0.45, 960.0, 0.0125, 0.45),
+               LayerConfig(name="backsheet", thickness_mm=0.30, density_kg_m3=1200.0, youngs_modulus_gpa=3.5, poissons_ratio=0.35)])
     mod4 = ModuleTwinConfig(
-        module_id="MOD-4-BIFACIAL72",
-        width_mm=1000.0, length_mm=2000.0,
+        module_id="MOD-4-BIFACIAL72", width_mm=1000.0, length_mm=2000.0,
         layout=ModuleLayoutConfig(cells=72, half_cut=False, rows=12, cols=6, cell_size="M10"),
-        stack=[
-            LayerConfig(name="glass_front", thickness_mm=2.0, density_kg_m3=2500.0, youngs_modulus_gpa=72.0, poissons_ratio=0.22),
-            LayerConfig(name="poe_front", thickness_mm=0.40, density_kg_m3=920.0, youngs_modulus_gpa=0.020, poissons_ratio=0.43),
-            LayerConfig(name="si_cell", thickness_mm=0.160, density_kg_m3=2330.0, youngs_modulus_gpa=130.0, poissons_ratio=0.28),
-            LayerConfig(name="poe_back", thickness_mm=0.40, density_kg_m3=920.0, youngs_modulus_gpa=0.020, poissons_ratio=0.43),
-            LayerConfig(name="glass_back", thickness_mm=2.0, density_kg_m3=2500.0, youngs_modulus_gpa=72.0, poissons_ratio=0.22),
-        ]
-    )
-    
-    # Mod 5: Thermal Cycling Aged Module (High Damping, T=65C) - HELD OUT
+        stack=[LayerConfig(name="glass_front", thickness_mm=2.0, density_kg_m3=2500.0, youngs_modulus_gpa=72.0, poissons_ratio=0.22),
+               _visco("poe_front", 0.40, 920.0, 0.020, 0.43),
+               LayerConfig(name="si_cell", thickness_mm=0.160, density_kg_m3=2330.0, youngs_modulus_gpa=130.0, poissons_ratio=0.28),
+               _visco("poe_back", 0.40, 920.0, 0.020, 0.43),
+               LayerConfig(name="glass_back", thickness_mm=2.0, density_kg_m3=2500.0, youngs_modulus_gpa=72.0, poissons_ratio=0.22)])
     mod5 = ModuleTwinConfig(
-        module_id="MOD-5-HOT65C",
-        width_mm=1040.0, length_mm=1760.0,
-        stack=[
-            LayerConfig(name="glass", thickness_mm=3.2, density_kg_m3=2500.0, youngs_modulus_gpa=70.0, poissons_ratio=0.23),
-            LayerConfig(name="eva_front", thickness_mm=0.45, density_kg_m3=960.0, youngs_modulus_gpa=0.005, poissons_ratio=0.48, temperature_c=65.0),
-            LayerConfig(name="si_cell", thickness_mm=0.175, density_kg_m3=2330.0, youngs_modulus_gpa=130.0, poissons_ratio=0.28),
-            LayerConfig(name="eva_back", thickness_mm=0.45, density_kg_m3=960.0, youngs_modulus_gpa=0.005, poissons_ratio=0.48, temperature_c=65.0),
-            LayerConfig(name="backsheet", thickness_mm=0.30, density_kg_m3=1200.0, youngs_modulus_gpa=3.2, poissons_ratio=0.36),
-        ]
-    )
-    
-    return [mod1, mod2, mod3, mod4, mod5]
+        module_id="MOD-5-HOT65C", width_mm=1040.0, length_mm=1760.0,
+        stack=[LayerConfig(name="glass", thickness_mm=3.2, density_kg_m3=2500.0, youngs_modulus_gpa=70.0, poissons_ratio=0.23),
+               _visco("eva_front", 0.45, 960.0, 0.005, 0.48, temp=65.0),
+               LayerConfig(name="si_cell", thickness_mm=0.175, density_kg_m3=2330.0, youngs_modulus_gpa=130.0, poissons_ratio=0.28),
+               _visco("eva_back", 0.45, 960.0, 0.005, 0.48, temp=65.0),
+               LayerConfig(name="backsheet", thickness_mm=0.30, density_kg_m3=1200.0, youngs_modulus_gpa=3.2, poissons_ratio=0.36)])
+    temps = {"MOD-5-HOT65C": (55.0, 75.0)}
+    return [mod1, mod2, mod3], [mod4, mod5], temps
 
-def bootstrap_ci(metric_fn, y_true, y_pred, y_prob=None, n_boot=500, seed=42):
-    """Compute 95% bootstrap confidence intervals [2.5%, 97.5%]."""
-    rng = np.random.default_rng(seed)
-    n = len(y_true)
-    scores = []
-    for _ in range(n_boot):
-        idx = rng.integers(0, n, n)
-        if y_prob is not None:
-            s = metric_fn(y_true[idx], y_pred[idx], y_prob[idx])
-        else:
-            s = metric_fn(y_true[idx], y_pred[idx])
-        scores.append(s)
-    scores = np.array(scores)
-    return float(np.percentile(scores, 2.5)), float(np.percentile(scores, 97.5))
 
-def run_large_scale_kpi_benchmark(n_total_events=20000, output_dir="data/benchmark_20k"):
-    out_path = Path(output_dir)
-    out_path.mkdir(parents=True, exist_ok=True)
-    
-    configs = get_5_module_configs()
-    n_per_config = n_total_events // len(configs)
-    
-    print(f"=== Generating {n_total_events:,} events across 5 distinct module configurations ===")
-    
-    all_waveforms = []
-    all_meta = []
-    
+def generate(configs, n_per, temps, seed0):
+    waves, dfs = [], []
     for i, cfg in enumerate(configs):
-        print(f"  [{i+1}/5] Generating {n_per_config:,} events for {cfg.module_id}...")
-        gen = DatasetGenerator(module_config=cfg, seed=1000 + i*100)
-        waves, df = gen.generate_batch(n_events=n_per_config, crack_ratio=0.60)
-        all_waveforms.append(waves)
-        all_meta.append(df)
-        
-    full_waveforms = np.concatenate(all_waveforms, axis=0) # (20000, 4, 2560)
-    full_df = pd.concat(all_meta, ignore_index=True)
-    
-    # Save to uncompressed array storage (int16 ADC counts) + Parquet metadata
-    npz_path = out_path / "waveforms.npz"
-    print(f"Saving uncompressed waveforms (int16 ADC counts) to: {npz_path}...")
-    # Quantize to int16 to reflect 14/16-bit ADC counts as per PRD 8.2
-    # Waveform voltages are typically +/- 2.5V, scale to ADC counts or save as float32/int16
-    full_waveforms_int16 = np.clip(full_waveforms * 1000.0, -32768, 32767).astype(np.int16)
-    np.savez(str(npz_path), waveforms=full_waveforms_int16)
-    
-    parquet_path = out_path / "events.parquet"
-    print(f"Saving metadata index to Parquet: {parquet_path}...")
-    # Drop raw feature vector column for clean parquet metadata storage
-    meta_for_parquet = full_df.drop(columns=["feature_vector"])
-    table = pa.Table.from_pandas(meta_for_parquet)
-    pq.write_table(table, str(parquet_path))
-    
-    # Split into Train (Mods 1, 2, 3) and Held-Out Test (Mods 4, 5)
-    train_indices = full_df[full_df["event_id"].str.startswith("EVT-1000") | 
-                            full_df["event_id"].str.startswith("EVT-1100") | 
-                            full_df["event_id"].str.startswith("EVT-1200")].index
-    held_out_indices = full_df[full_df["event_id"].str.startswith("EVT-1300") | 
-                               full_df["event_id"].str.startswith("EVT-1400")].index
-    
-    print(f"\nTrain set: {len(train_indices):,} events (Mods 1-3)")
-    print(f"Held-out test set: {len(held_out_indices):,} events (Mods 4-5) - ZERO DATA LEAKAGE")
-    
-    X_train = np.stack(full_df.loc[train_indices, "feature_vector"].values)
-    y_train = full_df.loc[train_indices, "is_crack"].values
-    
-    X_test = np.stack(full_df.loc[held_out_indices, "feature_vector"].values)
-    y_test = full_df.loc[held_out_indices, "is_crack"].values
-    
-    # Model 1: LightGBM
-    print("\n--- Training LightGBM Baseline Model ---")
-    lgbm = LGBMClassifier(n_estimators=100, learning_rate=0.1, random_state=42, verbose=-1)
-    lgbm.fit(X_train, y_train)
-    lgbm_probs = lgbm.predict_proba(X_test)[:, 1]
-    lgbm_preds = lgbm.predict(X_test)
-    
-    # Model 2: 1D-ResNet
-    print("--- Evaluating 1D-ResNet Deep Waveform Model ---")
-    resnet = Waveform1DResNet(in_channels=4, n_features=16, seed=42)
-    resnet_test_waves = full_waveforms[held_out_indices]
-    # Predict in batches
-    resnet_probs = []
-    bs = 200
-    for b in range(0, len(resnet_test_waves), bs):
-        batch = resnet_test_waves[b:b+bs]
-        probs = resnet.forward(batch)
-        resnet_probs.extend(probs)
-    resnet_probs = np.array(resnet_probs)
-    resnet_preds = (resnet_probs >= 0.5).astype(int)
-    
-    # Metrics Computation
-    m_lgbm = compute_classification_metrics(y_test, lgbm_preds, lgbm_probs)
-    m_resnet = compute_classification_metrics(y_test, resnet_preds, resnet_probs)
-    
-    # Detection recall at fixed FAR (1 false alarm per module-day)
-    # 10,000 ambient noise triggers/day -> target FPR <= 1e-4
-    prec, rec, thresholds = precision_recall_curve(y_test, lgbm_probs)
-    # Find operating threshold where False Positive Rate <= 0.0001
-    fpr_target = 1.0 / 10000.0
-    # From confusion matrix on test noise samples
-    noise_probs = lgbm_probs[y_test == 0]
-    thresh_fixed_far = float(np.percentile(noise_probs, 100.0 * (1.0 - fpr_target)))
-    recall_at_1_far = float(np.mean(lgbm_probs[y_test == 1] >= thresh_fixed_far))
-    
-    # Bootstrap Confidence Intervals (95%)
-    ci_f1_lgbm = bootstrap_ci(lambda yt, yp, ypr: compute_classification_metrics(yt, yp, ypr)["f1_score"], y_test, lgbm_preds, lgbm_probs)
-    ci_f1_resnet = bootstrap_ci(lambda yt, yp, ypr: compute_classification_metrics(yt, yp, ypr)["f1_score"], y_test, resnet_preds, resnet_probs)
-    ci_ece_lgbm = bootstrap_ci(lambda yt, yp, ypr: compute_classification_metrics(yt, yp, ypr)["ece"], y_test, lgbm_preds, lgbm_probs)
-    
-    # Confusion matrix
-    cm_lgbm = confusion_matrix(y_test, lgbm_preds).tolist()
-    
-    # Localization accuracy vs SNR
-    sensor_positions = [(60.0, 60.0), (60.0, 1640.0), (980.0, 60.0), (980.0, 1640.0)]
-    localizer = TDOALocalizer(sensor_positions)
-    loc_errors = []
-    snr_list = []
-    cell_id_matches = 0
-    
-    # Evaluate on a representative sample of 250 crack events from held-out set
-    crack_sample_indices = full_df[(full_df["is_crack"] == 1) & full_df.index.isin(held_out_indices)].index[:250]
-    for idx in crack_sample_indices:
-        w = full_waveforms[idx]
-        dt_s = localizer.estimate_time_differences(w)
-        res = localizer.solve_hyperbolic(dt_s)
-        true_x = full_df.loc[idx, "x_mm"]
-        true_y = full_df.loc[idx, "y_mm"]
-        err = np.hypot(res["x_mm"] - true_x, res["y_mm"] - true_y)
-        loc_errors.append(err)
-        
-        # Estimate SNR (dB) relative to 10 mV noise floor
-        amp = max(float(full_df.loc[idx, "peak_amp_mv"]), 0.1)
-        snr_db = 20.0 * np.log10(amp / 10.0)
-        snr_list.append(snr_db)
-        
-        # Check cell ID match (cell size ~ 91 x 182 mm; tolerance radius ~ 60 mm)
-        if err < 60.0:
-            cell_id_matches += 1
-            
-    loc_errors = np.array(loc_errors)
-    snr_arr = np.array(snr_list)
-    
-    median_loc_err = float(np.median(loc_errors))
-    p90_loc_err = float(np.percentile(loc_errors, 90))
-    cell_acc = float(cell_id_matches / len(loc_errors))
-    
-    # Stratify localization error by SNR bins
-    low_snr_mask = snr_arr < 15.0
-    med_snr_mask = (snr_arr >= 15.0) & (snr_arr < 30.0)
-    high_snr_mask = snr_arr >= 30.0
-    
-    loc_by_snr = {
-        "low_snr_lt15db": {
-            "n_samples": int(np.sum(low_snr_mask)),
-            "median_err_mm": float(np.median(loc_errors[low_snr_mask])) if np.any(low_snr_mask) else 0.0,
-            "p90_err_mm": float(np.percentile(loc_errors[low_snr_mask], 90)) if np.any(low_snr_mask) else 0.0,
-        },
-        "med_snr_15_30db": {
-            "n_samples": int(np.sum(med_snr_mask)),
-            "median_err_mm": float(np.median(loc_errors[med_snr_mask])) if np.any(med_snr_mask) else 0.0,
-            "p90_err_mm": float(np.percentile(loc_errors[med_snr_mask], 90)) if np.any(med_snr_mask) else 0.0,
-        },
-        "high_snr_gt30db": {
-            "n_samples": int(np.sum(high_snr_mask)),
-            "median_err_mm": float(np.median(loc_errors[high_snr_mask])) if np.any(high_snr_mask) else 0.0,
-            "p90_err_mm": float(np.percentile(loc_errors[high_snr_mask], 90)) if np.any(high_snr_mask) else 0.0,
-        }
+        t = time.time()
+        gen = DatasetGenerator(module_config=cfg, seed=seed0 + 100 * i,
+                               temperature_range_c=temps.get(cfg.module_id, (-10.0, 65.0)), n_material_variants=2)
+        w, df = gen.generate_batch(n_events=n_per)
+        print(f"  {cfg.module_id}: {n_per} events in {time.time() - t:.0f} s", flush=True)
+        waves.append(w.astype(np.float32))  # halve memory; ADC data are 12-bit anyway
+        del gen
+        dfs.append(df)
+    return np.concatenate(waves), pd.concat(dfs, ignore_index=True)
+
+
+def tier1_localization():
+    """Tier-1 (scalar FD) localisation with a correct setup: reflecting frame edges,
+    5 mm grid (>= 10 points per wavelength at 100 kHz), 1 MHz read-out."""
+    W, L, dx, dt, c = 1.04, 1.76, 0.005, 0.5e-6, 5490.0
+    solver = Tier1WaveSolver(width_m=W, length_m=L, dx_m=dx, dt_s=dt, c_speed_m_s=c, boundary="reflecting")
+    sensors_m = [(0.06, 0.06), (0.06, L - 0.06), (W - 0.06, 0.06), (W - 0.06, L - 0.06)]
+    loc = TDOALocalizer([(x * 1e3, y * 1e3) for x, y in sensors_m])
+    n = 1400
+    t = np.arange(n) * dt
+    f0 = 100e3
+    tau = t - 300e-6
+    src = (1 - 2 * (np.pi * f0 * tau) ** 2) * np.exp(-((np.pi * f0 * tau) ** 2))
+    rng = np.random.default_rng(0)
+    errs = []
+    for sx, sy in [(0.30, 0.40), (0.50, 0.80), (0.70, 1.20), (0.25, 1.30), (0.80, 0.50), (0.45, 0.95)]:
+        w = solver.run_simulation(sx, sy, src, sensors_m)[0][:, ::2]  # decimate to 1 MHz
+        w = w / np.max(np.abs(w)) + rng.normal(0, 1e-3, w.shape)
+        r = loc.locate(w, v_eff_m_s=c, bounds_mm=(0, W * 1e3, 0, L * 1e3))
+        errs.append(float(np.hypot(r["x_mm"] - sx * 1e3, r["y_mm"] - sy * 1e3)))
+    return {"n_events": len(errs), "median_err_mm": float(np.median(errs)), "p90_err_mm": float(np.percentile(errs, 90)),
+            "errors_mm": errs, "setup": "reflecting edges, dx=5 mm, f0=100 kHz Ricker, gated TDOA"}
+
+
+def main(n_per_module: int = 1200, out_dir: str = "data/benchmark_20k", seed: int = 1000):
+    t_start = time.time()
+    out = root / out_dir
+    out.mkdir(parents=True, exist_ok=True)
+    train_cfgs, test_cfgs, temps = module_configs()
+    print("=== Generating training modules ===")
+    w_tr, df_tr = generate(train_cfgs, n_per_module, temps, seed)
+    print("=== Generating held-out modules ===")
+    w_te, df_te = generate(test_cfgs, n_per_module, temps, seed + 5000)
+
+    pd.concat([df_tr.assign(split="train"), df_te.assign(split="test")]).drop(columns=["feature_vector"]).to_parquet(out / "events.parquet")
+    np.savez_compressed(out / "waveforms.npz", train=w_tr.astype(np.float32), test=w_te.astype(np.float32))
+
+    X_tr, y_tr = feature_matrix(df_tr), label_vector(df_tr)
+    X_te, y_te = feature_matrix(df_te), label_vector(df_te)
+    rng = np.random.default_rng(seed)
+    cal_mask = rng.random(len(y_tr)) < 0.15
+    fit_mask = ~cal_mask
+
+    # ---------------- feature model
+    print("=== Training feature classifier ===")
+    clf = AEFeatureClassifier(max_iter=400).fit(X_tr[fit_mask], y_tr[fit_mask])
+    ts = TemperatureScaler().fit(clf.predict_proba(X_tr[cal_mask]), y_tr[cal_mask])
+    P_te = ts.transform(clf.predict_proba(X_te))
+    conformal = ConformalClassifier(alpha=0.1).fit(ts.transform(clf.predict_proba(X_tr[cal_mask])), y_tr[cal_mask])
+    sets = conformal.predict_sets(P_te)
+    mc = multiclass_metrics(y_te, P_te.argmax(1), EVENT_CLASSES)
+    ci = bootstrap_ci(lambda a, b: multiclass_metrics(a, b, EVENT_CLASSES)["macro_f1"], y_te, P_te.argmax(1), n_boot=300)
+
+    # ---------------- binary new-fracture detection (system level)
+    p_crack = clf.new_fracture_probability(P_te)
+    is_crack = df_te["is_crack"].values
+    triggered = df_te["triggered"].values.astype(bool)
+    pred = (p_crack >= 0.5) & triggered
+    binm = compute_classification_metrics(is_crack, pred.astype(int), p_crack)
+    noise_scores = p_crack[(is_crack == 0) & triggered]
+    target_fpr = 1.0 / NOISE_TRIGGERS_PER_MODULE_DAY
+    evt = evt_threshold(noise_scores, target_fpr)
+    thr = evt["threshold"]
+    crack_detected = triggered & (p_crack >= thr)
+    recall_at_far = float(np.mean(crack_detected[is_crack == 1]))
+
+    # ---------------- open-set test (withhold one source type)
+    withheld = "handling_tap"
+    k = EVENT_CLASSES.index(withheld)
+    keep = y_tr != k
+    clf_os = AEFeatureClassifier(max_iter=300).fit(X_tr[keep], y_tr[keep])
+    ood = MahalanobisOOD(quantile=0.99).fit(X_tr[keep], y_tr[keep])
+    unknown_flag = ood.is_unknown(X_te)
+    open_set = {
+        "withheld_class": withheld,
+        "unknown_detection_rate_on_withheld": float(np.mean(unknown_flag[y_te == k])),
+        "false_unknown_rate_on_known": float(np.mean(unknown_flag[y_te != k])),
+        "withheld_called_new_fracture_rate": float(np.mean(clf_os.new_fracture_probability(clf_os.predict_proba(X_te[y_te == k])) >= 0.5)),
     }
-    
-    # Tier-1 FDTD Localization Evaluation (5 test events to capture full elastodynamic scattering & reflections)
-    print("\n--- Running Tier-1 FDTD Localization Comparison (Elastodynamics with boundary reflections) ---")
-    from acoustisolar_physics.tier1 import Tier1WaveSolver
-    tier1_solver = Tier1WaveSolver(width_m=1.0, length_m=1.6, dx_m=0.010, dt_s=1.0e-6, c_speed_m_s=5300.0, pml_thickness_cells=10)
-    t1_loc_errors = []
-    # Test 5 source locations (in meters)
-    t1_sources_m = [(0.30, 0.40), (0.50, 0.80), (0.70, 1.20), (0.25, 1.30), (0.80, 0.50)]
-    t1_sensors_m = [(0.06, 0.06), (0.06, 1.54), (0.94, 0.06), (0.94, 1.54)]
-    t1_sensors_mm = [(x * 1e3, y * 1e3) for x, y in t1_sensors_m]
-    t1_localizer = TDOALocalizer(t1_sensors_mm)
-    
-    n_steps = 400
-    t = np.arange(n_steps) * 1.0e-6
-    f0 = 150.0e3
-    tau = (t - 1.5 / f0)
-    ricker = (1.0 - 2.0 * (np.pi * f0 * tau)**2) * np.exp(-(np.pi * f0 * tau)**2)
-    
-    for sx_m, sy_m in t1_sources_m:
-        t1_waves, _ = tier1_solver.run_simulation(
-            source_x_m=sx_m,
-            source_y_m=sy_m,
-            source_signal=ricker,
-            sensor_locations_m=t1_sensors_m
-        ) # shape: (4, 400)
-        t1_dt = t1_localizer.estimate_time_differences(t1_waves)
-        t1_res = t1_localizer.solve_hyperbolic(t1_dt)
-        t1_err = np.hypot(t1_res["x_mm"] - (sx_m * 1e3), t1_res["y_mm"] - (sy_m * 1e3))
-        t1_loc_errors.append(t1_err)
-        
-    t1_loc_errors = np.array(t1_loc_errors)
-    tier1_loc_summary = {
-        "n_events": len(t1_loc_errors),
-        "median_err_mm": float(np.median(t1_loc_errors)),
-        "p90_err_mm": float(np.percentile(t1_loc_errors, 90)),
-        "note": "Tier-1 includes edge reverberations and dispersion coda which increases TDOA jitter vs Tier-0 direct path"
+
+    # ---------------- deep model
+    deep = None
+    try:
+        from acoustisolar_ml.deep_model import Waveform1DResNet
+
+        print("=== Training 1D residual CNN ===")
+        net = Waveform1DResNet(seed=seed).fit(w_tr[fit_mask], y_tr[fit_mask], epochs=25, batch_size=64)
+        ts_d = TemperatureScaler().fit(net.predict_proba(w_tr[cal_mask]), y_tr[cal_mask])
+        Pd = ts_d.transform(net.predict_proba(w_te))
+        md = multiclass_metrics(y_te, Pd.argmax(1), EVENT_CLASSES)
+        deep = {"macro_f1": md["macro_f1"], "accuracy": md["accuracy"], "ece_top_label": multiclass_ece(y_te, Pd),
+                "per_class_f1": {c: v["f1"] for c, v in md["per_class"].items()}, "device": net.device}
+        net.save(root / "models" / "waveform_resnet.pt")
+        # simple ensemble
+        Pe = 0.5 * (P_te + Pd)
+        deep["ensemble_macro_f1"] = multiclass_metrics(y_te, Pe.argmax(1), EVENT_CLASSES)["macro_f1"]
+    except ImportError:
+        deep = {"skipped": "PyTorch not installed"}
+
+    # ---------------- localisation
+    loc_rows = df_te[(df_te["is_crack"] == 1) & (df_te["triggered"] == 1) & np.isfinite(df_te["loc_x_mm"])]
+    loc = compute_localization_metrics(loc_rows[["x_mm", "y_mm"]].values, loc_rows[["loc_x_mm", "loc_y_mm"]].values,
+                                       list(loc_rows["cell_id"]), list(loc_rows["loc_cell_id"]))
+    loc_by_module = {}
+    for mid, g in loc_rows.groupby("module_id"):
+        loc_by_module[mid] = compute_localization_metrics(g[["x_mm", "y_mm"]].values, g[["loc_x_mm", "loc_y_mm"]].values,
+                                                          list(g["cell_id"]), list(g["loc_cell_id"]))
+    print("=== Tier-1 localisation ===")
+    t1 = tier1_localization()
+
+    clf_path = root / "models" / "ae_feature_classifier.joblib"
+    digest = clf.save(clf_path)
+
+    summary = {
+        "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "runtime_s": round(time.time() - t_start, 1),
+        "dataset": {
+            "n_train": int(len(y_tr)), "n_test": int(len(y_te)), "n_per_module": n_per_module,
+            "train_modules": [c.module_id for c in train_cfgs], "test_modules": [c.module_id for c in test_cfgs],
+            "class_counts_test": {c: int(np.sum(y_te == i)) for i, c in enumerate(EVENT_CLASSES)},
+            "trigger_rate_by_class_test": df_te.groupby("event_class")["triggered"].mean().round(3).to_dict(),
+            "clipped_fraction_test": float(df_te["clipped"].mean()),
+        },
+        "feature_model": {
+            "model": "AEFeatureClassifier (HistGradientBoosting) + temperature scaling",
+            "temperature": ts.temperature,
+            "macro_f1": mc["macro_f1"], "macro_f1_95ci": list(ci), "accuracy": mc["accuracy"],
+            "ece_top_label": multiclass_ece(y_te, P_te),
+            "per_class_f1": {c: v["f1"] for c, v in mc["per_class"].items()},
+            "confusion_matrix": mc["confusion_matrix"], "classes": EVENT_CLASSES,
+            "conformal_alpha": 0.1, "conformal_coverage": ConformalClassifier.coverage(sets, y_te),
+            "conformal_mean_set_size": float(np.mean([len(s) for s in sets])),
+            "model_file": str(clf_path.relative_to(root)), "model_sha256": digest,
+        },
+        "new_fracture_detection": {
+            "f1_at_0.5": binm["f1_score"], "precision_at_0.5": binm["precision"], "recall_at_0.5": binm["recall"],
+            "pr_auc": binm["pr_auc"], "ece": binm["ece"],
+            "crack_trigger_rate": float(np.mean(triggered[is_crack == 1])),
+            "noise_triggers_per_module_day_assumption": NOISE_TRIGGERS_PER_MODULE_DAY,
+            "evt_threshold": evt, "recall_at_1_far_per_module_day": recall_at_far,
+            "n_noise_events_triggered": int(len(noise_scores)),
+        },
+        "open_set": open_set,
+        "deep_model": deep,
+        "localization_tier0_heldout": {**loc, "by_module": loc_by_module},
+        "localization_tier1": t1,
+        "targets": TARGETS,
+        "target_status": {
+            "recall_at_1_far": recall_at_far >= TARGETS["recall_at_1_far"],
+            "macro_f1": mc["macro_f1"] >= TARGETS["macro_f1"],
+            "loc_median_mm": loc["median_error_mm"] <= TARGETS["loc_median_mm"],
+            "loc_p90_mm": loc["p90_error_mm"] <= TARGETS["loc_p90_mm"],
+            "cell_id_accuracy": loc["cell_id_accuracy"] >= TARGETS["cell_id_accuracy"],
+            "ece": binm["ece"] <= TARGETS["ece"],
+        },
+        "caveat": "Simulation-only (Tier-0 synthetic data). No real PV AE data exist yet; these numbers are "
+                  "not field performance claims (see docs/research/CODEBASE_EVALUATION.md §6).",
     }
-    
-    results = {
-        "n_total_events": n_total_events,
-        "n_train": len(train_indices),
-        "n_held_out_test": len(held_out_indices),
-        "recall_at_1_far_per_mod_day": recall_at_1_far,
-        "lightgbm": {
-            "macro_f1": m_lgbm["f1_score"],
-            "macro_f1_95ci": list(ci_f1_lgbm),
-            "accuracy": m_lgbm["accuracy"],
-            "ece": m_lgbm["ece"],
-            "ece_95ci": list(ci_ece_lgbm),
-            "confusion_matrix_2x2": cm_lgbm,
-        },
-        "resnet_1d": {
-            "macro_f1": m_resnet["f1_score"],
-            "macro_f1_95ci": list(ci_f1_resnet),
-            "accuracy": m_resnet["accuracy"],
-            "ece": m_resnet["ece"],
-        },
-        "localization": {
-            "tier0": {
-                "median_error_mm": median_loc_err,
-                "p90_error_mm": p90_loc_err,
-                "cell_id_accuracy": cell_acc,
-                "by_snr": loc_by_snr,
-            },
-            "tier1": tier1_loc_summary,
-        },
-        "kpi_target_comparison": {
-            "recall_at_fixed_far": {
-                "achieved": recall_at_1_far,
-                "target": 0.98,
-                "met": bool(recall_at_1_far >= 0.98),
-            },
-            "classification_macro_f1": {
-                "achieved": m_lgbm["f1_score"],
-                "target": 0.95,
-                "met": bool(m_lgbm["f1_score"] >= 0.95),
-            },
-            "localization_median_mm": {
-                "achieved": median_loc_err,
-                "target": 15.0, # 1.5 cm
-                "met": bool(median_loc_err <= 15.0),
-            },
-            "localization_p90_mm": {
-                "achieved": p90_loc_err,
-                "target": 40.0, # 4 cm
-                "met": bool(p90_loc_err <= 40.0),
-            },
-            "cell_id_accuracy": {
-                "achieved": cell_acc,
-                "target": 0.95,
-                "met": bool(cell_acc >= 0.95),
-            },
-            "ece_calibration": {
-                "achieved": m_lgbm["ece"],
-                "target": 0.05,
-                "met": bool(m_lgbm["ece"] <= 0.05),
-            }
-        }
-    }
-    return results
+    (out / "benchmark_summary.json").write_text(json.dumps(summary, indent=2, default=float), encoding="utf-8")
+    (root / "validation" / "kpi_benchmark_summary.json").write_text(json.dumps(summary, indent=2, default=float),
+                                                                    encoding="utf-8")
+    print(json.dumps({k: summary[k] for k in ("feature_model", "new_fracture_detection", "localization_tier0_heldout",
+                                               "localization_tier1", "open_set", "deep_model", "target_status")},
+                     indent=1, default=float)[:6000])
+    return summary
+
 
 if __name__ == "__main__":
-    import json
-    res = run_large_scale_kpi_benchmark(n_total_events=20000)
-    print("\n=== FINAL BENCHMARK SUMMARY ===")
-    print(json.dumps(res, indent=2))
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--n-per-module", type=int, default=1200)
+    args = ap.parse_args()
+    main(n_per_module=args.n_per_module)

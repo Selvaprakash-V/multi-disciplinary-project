@@ -18,7 +18,9 @@ class CrackType(str, Enum):
     NONE = "none"
 
 class NoiseClass(str, Enum):
-    RAIN_HAIL = "rain_hail"
+    RAIN = "rain"            # dense train of small drop impacts
+    HAIL = "hail"            # single large ice impact (may itself crack cells)
+    RAIN_HAIL = "rain_hail"  # deprecated: kept for backward compatibility, treated as HAIL
     WIND_RATTLE = "wind_rattle"
     THERMAL_TICK = "thermal_tick"
     EMI_BURST = "emi_burst"

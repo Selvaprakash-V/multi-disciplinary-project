@@ -232,55 +232,64 @@
         2834.320752565222
       ]
     },
+    "safe_single_layer_regression": [
+      {
+        "k_rad_m": 150.0,
+        "s0_safe": 5497.062715001084,
+        "s0_lamb": 5497.050006893931,
+        "a0_safe": 735.5002064448535,
+        "a0_lamb": 735.1038505904027
+      },
+      {
+        "k_rad_m": 300.0,
+        "s0_safe": 5482.979006027019,
+        "s0_lamb": 5482.908832534804,
+        "a0_safe": 1342.9959302378845,
+        "a0_lamb": 1342.5153142051665
+      },
+      {
+        "k_rad_m": 600.0,
+        "s0_safe": 5399.643263779777,
+        "s0_lamb": 5398.70321632398,
+        "a0_safe": 2117.4627821646673,
+        "a0_lamb": 2115.7315577267495
+      }
+    ],
     "safe_vs_free_glass": {
       "k_rad_m": 150.0,
-      "free_glass_s0_m_s": 5498.988514241266,
-      "multilayer_safe_s0_m_s": 3275.5460470336234,
-      "multilayer_safe_a0_m_s": 3042.203033909322,
-      "velocity_reduction_pct": -40.43366268995429
+      "free_glass_s0_m_s": 5497.141287940469,
+      "multilayer_safe_s0_m_s": 5439.7361988887,
+      "multilayer_safe_a0_m_s": 706.8864285937211,
+      "velocity_change_pct": -1.0442716685798759,
+      "note": "Earlier reports of a -40 % S0 reduction were caused by a sign error in the SAFE cross-coupling block (fixed 2026-11); thin soft layers only mass-load the glass."
     }
   },
   "reciprocity": {
     "status": "PASS",
-    "rel_reciprocity_error_pct": 0.010446003481462388,
-    "source_A": [
-      0.15,
-      0.2
-    ],
-    "source_B": [
-      0.38,
-      0.4
-    ],
-    "has_heterogeneity": true
+    "relative_l2_error": 1.1553161582542738e-15,
+    "heterogeneous": true
   },
   "convergence": {
-    "resolutions_mm": [
-      20.0,
-      10.0,
-      5.0,
-      2.5
-    ],
-    "points_per_wavelength": [
-      0.6625,
-      1.325,
-      2.65,
-      5.3
-    ],
-    "observed_convergence_order": [
-      2.1243005666800023,
-      0.24772098850311414
-    ],
-    "boundary_reflection_coeff_pct": 2.366892032737202
+    "status": "PASS",
+    "observed_order": 1.9300007756329893,
+    "expected_order": 2.0,
+    "points_per_wavelength_finest": 35.33333333333333,
+    "sponge_reflection_pct_of_direct": 11.242849640835498,
+    "free_edge_reflection_pct_of_direct": 113.25424170647615
   },
   "tier0_vs_tier1_gap": {
-    "early_arrival_correlation": 0.4411921211976094,
-    "full_window_correlation": 0.2531859674983562,
-    "reverberation_energy_ratio": 0.19898499041735243,
-    "physics_in_t1_not_in_t0": [
-      "Plate edge boundary reflections & reverberation coda",
-      "Multi-path interference from cell boundaries and metal ribbons",
-      "Diffraction around crack faces and corners",
-      "Near-field spatial elastodynamic coupling"
+    "status": "PASS",
+    "tier1_speed_m_s": 5472.312703583062,
+    "tier0_s0_speed_m_s": 5491.064422630838,
+    "speed_error_pct": 0.3414951565764264,
+    "tolerance_pct": 3.0,
+    "physics_in_tier1_not_in_tier0": [
+      "heterogeneity (cell/ribbon inclusions)",
+      "higher-order multipath beyond the image-source order"
+    ],
+    "physics_in_tier0_not_in_tier1": [
+      "A0/S0 dispersion and mode-dependent attenuation",
+      "PZT coupling"
     ]
   }
 }

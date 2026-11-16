@@ -21,13 +21,12 @@ sys.path.insert(0, str(root / "packages" / "daqtwin" / "src"))
 sys.path.insert(0, str(root / "packages" / "dsp" / "src"))
 sys.path.insert(0, str(root / "packages" / "ml" / "src"))
 sys.path.insert(0, str(root / "packages" / "sdk" / "src"))
+sys.path.insert(0, str(root / "validation"))
 
 from acoustisolar_physics.materials import GLASS_MATERIAL
 from acoustisolar_physics.lamb import LambDispersionSolver
 from acoustisolar_physics.safe import MultilayerSAFESolver
-from acoustisolar_physics.tier0 import Tier0Simulator
 from acoustisolar_physics.tier1 import Tier1WaveSolver
-from acoustisolar_schemas.source import SourceEventConfig, SourceClass
 
 def independent_lamb_reference(freq_hz: float, thickness_m: float, cL: float, cT: float, mode: str = "S0") -> float:
     """
@@ -127,192 +126,82 @@ def run_dispersion_verification() -> dict:
             results[f"{th_mm:.1f}mm"]["a0_ref"].append(float(ref_a0))
             results[f"{th_mm:.1f}mm"]["a0_err_pct"].append(float(err_a0))
 
-    # Multilayer SAFE vs free glass comparison
-    safe_solver = MultilayerSAFESolver(n_elem_per_layer=3)
-    k_test = 150.0 # rad/m
-    safe_freqs = safe_solver.solve_modes_at_wavenumber(k_test, n_modes=2)
-    cp_safe_s0 = 2.0 * np.pi * safe_freqs[1] / k_test
-    cp_safe_a0 = 2.0 * np.pi * safe_freqs[0] / k_test
-    
-    # Compare with free 3.2mm glass
-    free_glass_s0 = solver.find_phase_velocity_s0(safe_freqs[1])
-    delta_s0_pct = (cp_safe_s0 - free_glass_s0) / free_glass_s0 * 100.0
-    
+    # Multilayer SAFE: single-layer regression and laminate vs free glass
+    single = MultilayerSAFESolver(layers=[("glass", 3.2e-3, 2500.0, 72.0e9, 0.22)], n_elem_per_layer=12)
+    solver32 = LambDispersionSolver(thickness_m=3.2e-3)
+    reg = []
+    for k in (150.0, 300.0, 600.0):
+        fs, cs, fa, ca = single.compute_dispersion(np.array([k]))
+        reg.append({
+            "k_rad_m": k,
+            "s0_safe": float(cs[0]), "s0_lamb": float(solver32.find_phase_velocity_s0(fs[0])),
+            "a0_safe": float(ca[0]), "a0_lamb": float(solver32.find_phase_velocity_a0(fa[0])),
+        })
+    stack = MultilayerSAFESolver(n_elem_per_layer=4)
+    k_test = 150.0
+    fs, cs, fa, ca = stack.compute_dispersion(np.array([k_test]))
+    free_glass_s0 = solver32.find_phase_velocity_s0(fs[0])
+    results["safe_single_layer_regression"] = reg
     results["safe_vs_free_glass"] = {
         "k_rad_m": k_test,
         "free_glass_s0_m_s": float(free_glass_s0),
-        "multilayer_safe_s0_m_s": float(cp_safe_s0),
-        "multilayer_safe_a0_m_s": float(cp_safe_a0),
-        "velocity_reduction_pct": float(delta_s0_pct),
+        "multilayer_safe_s0_m_s": float(cs[0]),
+        "multilayer_safe_a0_m_s": float(ca[0]),
+        "velocity_change_pct": float((cs[0] - free_glass_s0) / free_glass_s0 * 100.0),
+        "note": "Earlier reports of a -40 % S0 reduction were caused by a sign error in the SAFE "
+                "cross-coupling block (fixed 2026-11); thin soft layers only mass-load the glass.",
     }
     return results
 
 def run_reciprocity_verification() -> dict:
-    print("\n--- 2.b) Tier-1 Reciprocity Test on Asymmetric Non-Uniform Medium ---")
-    # Build a non-uniform 2D grid with an asymmetric high-density / low-velocity inclusion (e.g. cracked silicon cell / solder joint)
-    width = 0.5
-    length = 0.5
-    dx = 0.010 # 10 mm
-    dt = 1.0e-6
-    c0 = 5300.0
-    
-    solver = Tier1WaveSolver(width_m=width, length_m=length, dx_m=dx, dt_s=dt, c_speed_m_s=c0, pml_thickness_cells=10)
-    
-    # Introduce spatial heterogeneity (non-uniform wave speed matrix c(x,y))
-    c_field = np.full((solver.nx, solver.ny), c0)
-    # Asymmetric inclusion at x in [0.25, 0.35], y in [0.15, 0.30] (defect/cell inclusion)
-    i_min, i_max = int(0.25 / dx), int(0.35 / dx)
-    j_min, j_max = int(0.15 / dx), int(0.30 / dx)
-    c_field[i_min:i_max, j_min:j_max] = 3800.0 # 28% reduction in wave speed
-    
-    # Update courant array
-    solver.courant_sq_field = (c_field * dt / dx)**2
-    
-    # Asymmetric sensor positions A and B
-    pos_A = (0.15, 0.20)
-    pos_B = (0.38, 0.40)
-    
-    n_steps = 250
-    t = np.arange(n_steps) * dt
-    # Ricker wavelet excitation source
-    f0 = 120.0e3
-    tau = (t - 2.0 / f0)
-    source = (1.0 - 2.0 * (np.pi * f0 * tau)**2) * np.exp(-(np.pi * f0 * tau)**2)
-    
-    # Simulation 1: Source at A, observe at B
-    w_A_to_B, _ = solver.run_simulation(source_x_m=pos_A[0], source_y_m=pos_A[1], source_signal=source, sensor_locations_m=[pos_B])
-    sig_AB = w_A_to_B[0]
-    
-    # Simulation 2: Source at B, observe at A
-    w_B_to_A, _ = solver.run_simulation(source_x_m=pos_B[0], source_y_m=pos_B[1], source_signal=source, sensor_locations_m=[pos_A])
-    sig_BA = w_B_to_A[0]
-    
-    # Compute reciprocity error: L2 relative discrepancy
-    diff = np.linalg.norm(sig_AB - sig_BA)
-    norm = np.linalg.norm(sig_AB)
-    rel_err = float(diff / max(norm, 1e-12))
-    
-    print(f"  Reciprocity L2 relative difference: {rel_err * 100.0:.4f}%")
-    return {
-        "status": "PASS" if rel_err < 0.02 else "FAIL", # < 2% numerical grid tolerance
-        "rel_reciprocity_error_pct": float(rel_err * 100.0),
-        "source_A": pos_A,
-        "source_B": pos_B,
-        "has_heterogeneity": True,
-    }
+    print("\n--- 2.b) Tier-1 Reciprocity Test on a Heterogeneous Medium ---")
+    from run_vv_suite import check_tier1_reciprocity
+
+    res = check_tier1_reciprocity()
+    print(f"  Reciprocity relative L2 error: {res['relative_l2_error']:.3e}")
+    return res
+
 
 def run_convergence_and_boundary_study() -> dict:
-    print("\n--- 2.c) Numerical Convergence & Boundary Reflection Study ---")
-    width = 0.4
-    length = 0.4
-    c0 = 5300.0
-    f_max = 400.0e3
-    lambda_min = c0 / f_max # 13.25 mm
-    
-    resolutions = [0.020, 0.010, 0.005, 0.0025] # 20mm, 10mm, 5mm, 2.5mm
-    ppws = [lambda_min / dx for dx in resolutions]
-    
-    sim_data = []
-    t_end = 40.0e-6
-    src_pos = (0.2, 0.2)
-    obs_pos = (0.28, 0.2)
-    
-    for dx in resolutions:
-        dt = (dx / c0) * 0.50 # Courant = 0.50 (CFL compliant)
-        n_steps = int(t_end / dt)
-        t = np.arange(n_steps) * dt
-        # Broadband smooth pulse
-        f0 = 150.0e3
-        tau = (t - 1.5 / f0)
-        src = (1.0 - 2.0 * (np.pi * f0 * tau)**2) * np.exp(-(np.pi * f0 * tau)**2)
-        
-        solver = Tier1WaveSolver(width_m=width, length_m=length, dx_m=dx, dt_s=dt, c_speed_m_s=c0, pml_thickness_cells=10)
-        waves, _ = solver.run_simulation(source_x_m=src_pos[0], source_y_m=src_pos[1], source_signal=src, sensor_locations_m=[obs_pos])
-        
-        # Resample signal to common time grid for comparison
-        t_common = np.linspace(0, t_end, 500)
-        w_interp = np.interp(t_common, t, waves[0])
-        sim_data.append(w_interp)
+    print("\n--- 2.c) Grid Convergence & Boundary Reflection Study ---")
+    from run_vv_suite import check_tier1_convergence
 
-    # Calculate convergence order: L2 norm of difference between consecutive grids
-    e1 = np.linalg.norm(sim_data[0] - sim_data[1])
-    e2 = np.linalg.norm(sim_data[1] - sim_data[2])
-    e3 = np.linalg.norm(sim_data[2] - sim_data[3])
-    
-    order1 = np.log2(e1 / max(e2, 1e-12))
-    order2 = np.log2(e2 / max(e3, 1e-12))
-    
-    # Boundary reflection study
-    # Compare peak of boundary-reflected wave to direct incident wave
-    solver_pml = Tier1WaveSolver(width_m=0.3, length_m=0.3, dx_m=0.005, dt_s=0.5e-6, c_speed_m_s=c0, pml_thickness_cells=12)
-    dt_pml = 0.5e-6
-    n_pml_steps = 300
-    t_pml = np.arange(n_pml_steps) * dt_pml
-    src_pml = np.exp(-((t_pml - 10e-6)/3e-6)**2) * np.sin(2*np.pi*200e3*t_pml)
-    # Sensor near boundary
-    waves_bnd, _ = solver_pml.run_simulation(source_x_m=0.15, source_y_m=0.15, source_signal=src_pml, sensor_locations_m=[(0.24, 0.15)])
-    sig = waves_bnd[0]
-    
-    # Direct wave is first packet; reflected wave from right boundary arrives after 2*(0.3 - 0.24)/c ~ 22 us
-    direct_peak = np.max(np.abs(sig[:int(60e-6 / dt_pml)]))
-    reflected_tail = np.max(np.abs(sig[int(70e-6 / dt_pml):]))
-    refl_coeff = float(reflected_tail / max(direct_peak, 1e-12))
-    
-    print(f"  Observed Convergence Order: {order1:.2f} -> {order2:.2f} (Theoretical: 2.0 for 2nd order FDTD)")
-    print(f"  Sponge boundary reflection coefficient: {refl_coeff * 100.0:.2f}%")
-    
-    return {
-        "resolutions_mm": [dx * 1000 for dx in resolutions],
-        "points_per_wavelength": [float(p) for p in ppws],
-        "observed_convergence_order": [float(order1), float(order2)],
-        "boundary_reflection_coeff_pct": float(refl_coeff * 100.0),
-    }
+    conv = check_tier1_convergence()
+    # Sponge reflection coefficient: sensor kept outside the absorber
+    c0, dx, dt = 5300.0, 0.004, 0.35e-6
+    kw = dict(width_m=0.4, length_m=0.4, dx_m=dx, dt_s=dt, c_speed_m_s=c0)
+    n = 400
+    t = np.arange(n) * dt
+    src = np.exp(-((t - 10e-6) / 3e-6) ** 2) * np.sin(2 * np.pi * 150e3 * t)
+    absorbing = Tier1WaveSolver(boundary="absorbing", pml_thickness_cells=12, **kw)
+    reflecting = Tier1WaveSolver(boundary="reflecting", **kw)
+    # reference: 1.6 m domain, same relative geometry -> no echo inside the window
+    big = Tier1WaveSolver(boundary="reflecting", width_m=1.6, length_m=1.6, dx_m=dx, dt_s=dt, c_speed_m_s=c0)
+    a = absorbing.run_simulation(0.2, 0.2, src, [(0.3, 0.2)])[0][0]
+    r = reflecting.run_simulation(0.2, 0.2, src, [(0.3, 0.2)])[0][0]
+    ref = big.run_simulation(0.8, 0.8, src, [(0.9, 0.8)])[0][0]
+    direct = np.max(np.abs(ref))
+    sponge_refl = float(np.max(np.abs(a - ref)) / direct)
+    hard_refl = float(np.max(np.abs(r - ref)) / direct)
+    print(f"  Observed order: {conv['observed_order']:.2f}; boundary reflection: sponge {sponge_refl * 100:.1f}% "
+          f"vs free edge {hard_refl * 100:.1f}% (of direct-wave peak)")
+    conv["sponge_reflection_pct_of_direct"] = sponge_refl * 100.0
+    conv["free_edge_reflection_pct_of_direct"] = hard_refl * 100.0
+    return conv
+
 
 def run_tier0_vs_tier1_gap() -> dict:
-    print("\n--- 2.d) Tier-0 vs Tier-1 Discrepancy Test (Edge Reflections & Obstacles) ---")
-    # Compare Tier-0 (analytical ray) vs Tier-1 (full wave equation) in two regimes:
-    # 1. Clean unbounded/early arrival (where both should agree)
-    # 2. Strong boundary reverberation & cell obstacle (where Tier-0 and Tier-1 MUST disagree)
-    c0 = 5300.0
-    dx = 0.005
-    dt = 0.5e-6
-    solver = Tier1WaveSolver(width_m=0.4, length_m=0.4, dx_m=dx, dt_s=dt, c_speed_m_s=c0, pml_thickness_cells=2) # thin sponge -> strong reflections
-    
-    n_steps = 400
-    t = np.arange(n_steps) * dt
-    src = np.exp(-((t - 10e-6)/2.5e-6)**2) * np.sin(2*np.pi*180e3*t)
-    
-    # Source at (0.2, 0.2), sensor near corner at (0.05, 0.05)
-    w_t1, _ = solver.run_simulation(source_x_m=0.2, source_y_m=0.2, source_signal=src, sensor_locations_m=[(0.05, 0.05)])
-    
-    # Tier-0 direct ray (no boundary reflections)
-    dist = np.hypot(0.2 - 0.05, 0.2 - 0.05)
-    t_delay = dist / c0
-    w_t0 = np.interp(t - t_delay, t, src, left=0.0, right=0.0) / np.sqrt(dist / 0.02)
-    
-    # In early direct window (t < 70 us): high correlation
-    idx_early = int(70e-6 / dt)
-    corr_early = np.corrcoef(w_t0[:idx_early], w_t1[0][:idx_early])[0, 1]
-    
-    # In full reverberant window (including reflections from plate boundaries): large discrepancy!
-    corr_full = np.corrcoef(w_t0, w_t1[0])[0, 1]
-    discrepancy_late = float(np.linalg.norm(w_t1[0][idx_early:]) / max(np.linalg.norm(w_t0[idx_early:]), 1e-12))
-    
-    print(f"  Early direct-arrival correlation: {corr_early:.3f} (both agree)")
-    print(f"  Full window correlation with edge reflections: {corr_full:.3f}")
-    print(f"  Late-time reverberation energy ratio (Tier-1 vs Tier-0): {discrepancy_late:.2f}x")
-    
-    return {
-        "early_arrival_correlation": float(corr_early),
-        "full_window_correlation": float(corr_full),
-        "reverberation_energy_ratio": float(discrepancy_late),
-        "physics_in_t1_not_in_t0": [
-            "Plate edge boundary reflections & reverberation coda",
-            "Multi-path interference from cell boundaries and metal ribbons",
-            "Diffraction around crack faces and corners",
-            "Near-field spatial elastodynamic coupling",
-        ]
-    }
+    print("\n--- 2.d) Tier-0 vs Tier-1 Kinematic Agreement and Edge-Reflection Content ---")
+    from run_vv_suite import check_tier0_tier1_arrival_agreement
+
+    res = check_tier0_tier1_arrival_agreement()
+    print(f"  Speed recovered from Tier-1 arrivals vs Tier-0 S0: {res['speed_error_pct']:.2f}% error")
+    res["physics_in_tier1_not_in_tier0"] = [
+        "heterogeneity (cell/ribbon inclusions)",
+        "higher-order multipath beyond the image-source order",
+    ]
+    res["physics_in_tier0_not_in_tier1"] = ["A0/S0 dispersion and mode-dependent attenuation", "PZT coupling"]
+    return res
 
 if __name__ == "__main__":
     import json

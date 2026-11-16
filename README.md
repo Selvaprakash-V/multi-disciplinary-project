@@ -86,8 +86,32 @@ waveforms, df_index = client.generate_synthetic_dataset(n_events=20)
 
 # 3. Evaluate on held-out module configuration (zero data leakage)
 metrics = client.evaluate_held_out(n_train=40, n_test=20)
-print(f"Generalization F1: {metrics['f1_score']:.3f}, ECE: {metrics['ece']:.3f}")
+print(f"New-fracture F1: {metrics['f1_score']:.3f}, ECE: {metrics['ece']:.3f}")
 ```
+
+---
+
+## 3a. Research-Driven Revision (2026-11)
+
+A literature review and code evaluation ([docs/research/](docs/research/)) led to a revision
+of the physics, signal processing, ML and verification layers.  Highlights:
+
+- **Physics:** fixed a sign error in the multilayer SAFE solver (its dispersion curves were
+  unphysical); Tier-0 now uses mode-resolved laminate physics from the configured stack,
+  source-dependent A0/S0 excitation, out-of-plane PZT coupling with aperture, frame
+  reflections, causal spectral shaping and realistic absolute levels (the old data were 99 %
+  ADC-saturated).  Tier-1 is documented as a scalar solver; its sponge, geometry and
+  time-indexing bugs are fixed (2nd-order convergence verified).
+- **DAQ / DSP:** causal analog filters, multi-hit and floating-threshold triggering,
+  vectorised AIC, causal STA/LTA, mode-aware gated TDOA with robust all-sensor solving,
+  Delta-T mapping, extended AE features (RA, average frequency, partial powers, early/late
+  energy ratio, arrival spread, edge distance) in arrival order.
+- **ML:** 10-class labels incl. hail-induced cracks, a real trainable PyTorch residual CNN,
+  temperature scaling, conformal prediction sets, Mahalanobis "unknown source" detection,
+  GPD-based false-alarm thresholds, hash-verified model loading.
+- **Verification:** every V&V check computes a real quantity (`validation/run_vv_suite.py`,
+  results in `validation/out/`); the scale benchmark writes
+  `validation/kpi_benchmark_summary.json`.  **All results are simulation-only.**
 
 ---
 
@@ -101,6 +125,6 @@ print(f"Generalization F1: {metrics['f1_score']:.3f}, ECE: {metrics['ece']:.3f}"
 - **M6: DSP Engine:** AIC (Maeda 1985) and STA/LTA onset pickers, classic AE feature extraction, dispersion-corrected TDOA multilateration with covariance ellipses.
 - **M7: Dataset Factory:** Deterministic, seeded batch synthetic generator with domain randomization.
 - **M8: ML Baseline & Deep Models:** Gradient Boosted Trees, 1D-ResNet waveform classifier, held-out module configuration evaluation harness (PRD 9.5).
-- **M9: Tier-1 Solver:** 2D elastodynamic plate wave solver with absorbing sponge boundary layers (PML), Courant stability compliance, and multi-fidelity gap reporting.
-- **M10: Validation Suite & Report:** Automated V&V suite (`validation/run_vv_suite.py`) asserting reciprocity, CFL stability, dispersion match, and zero-leakage ML metrics.
+- **M9: Tier-1 Solver:** 2D *scalar* wave solver (self-adjoint flux form, heterogeneous media) with absorbing sponge or reflecting (frame) boundaries and Courant stability compliance.
+- **M10: Validation Suite & Report:** Automated V&V suite (`validation/run_vv_suite.py`) computing dispersion accuracy vs an independent reference, SAFE regression, causality, heterogeneous reciprocity, observed grid-convergence order, Tier-0/Tier-1 kinematic agreement and held-out ML metrics (KPI shortfalls reported as known gaps).
 

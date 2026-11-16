@@ -1,0 +1,299 @@
+{
+  "generated_utc": "2026-11-16T04:50:19+00:00",
+  "runtime_s": 209.0,
+  "dataset": {
+    "n_train": 1500,
+    "n_test": 1000,
+    "n_per_module": 500,
+    "train_modules": [
+      "MOD-1-STD120",
+      "MOD-2-LARGE144",
+      "MOD-3-UTIL60"
+    ],
+    "test_modules": [
+      "MOD-4-BIFACIAL72",
+      "MOD-5-HOT65C"
+    ],
+    "class_counts_test": {
+      "crack_initiation": 232,
+      "crack_growth": 186,
+      "crack_friction": 85,
+      "hail_crack": 107,
+      "hail": 50,
+      "rain": 52,
+      "wind_rattle": 69,
+      "thermal_tick": 67,
+      "emi_burst": 84,
+      "handling_tap": 68
+    },
+    "trigger_rate_by_class_test": {
+      "crack_friction": 0.506,
+      "crack_growth": 0.747,
+      "crack_initiation": 0.72,
+      "emi_burst": 1.0,
+      "hail": 0.88,
+      "hail_crack": 0.935,
+      "handling_tap": 0.779,
+      "rain": 0.635,
+      "thermal_tick": 0.925,
+      "wind_rattle": 0.493
+    },
+    "clipped_fraction_test": 0.12
+  },
+  "feature_model": {
+    "model": "AEFeatureClassifier (HistGradientBoosting) + temperature scaling",
+    "temperature": 1.1111300018298784,
+    "macro_f1": 0.532478366350199,
+    "macro_f1_95ci": [
+      0.5008449212591248,
+      0.5605224204901721
+    ],
+    "accuracy": 0.564,
+    "ece_top_label": 0.2049716001605896,
+    "per_class_f1": {
+      "crack_initiation": 0.6979166666666666,
+      "crack_growth": 0.7283582089552239,
+      "crack_friction": 0.5757575757575757,
+      "hail_crack": 0.46753246753246747,
+      "hail": 0.25,
+      "rain": 0.3962264150943396,
+      "wind_rattle": 0.311284046692607,
+      "thermal_tick": 0.6902654867256638,
+      "emi_burst": 0.865979381443299,
+      "handling_tap": 0.34146341463414637
+    },
+    "confusion_matrix": [
+      [
+        134,
+        21,
+        5,
+        0,
+        1,
+        2,
+        47,
+        3,
+        0,
+        19
+      ],
+      [
+        7,
+        122,
+        1,
+        5,
+        1,
+        2,
+        30,
+        0,
+        0,
+        18
+      ],
+      [
+        0,
+        2,
+        38,
+        0,
+        3,
+        15,
+        14,
+        0,
+        0,
+        13
+      ],
+      [
+        2,
+        1,
+        0,
+        36,
+        35,
+        3,
+        9,
+        2,
+        8,
+        11
+      ],
+      [
+        1,
+        2,
+        0,
+        4,
+        15,
+        3,
+        10,
+        1,
+        3,
+        11
+      ],
+      [
+        0,
+        0,
+        1,
+        0,
+        0,
+        21,
+        16,
+        0,
+        3,
+        11
+      ],
+      [
+        0,
+        1,
+        1,
+        2,
+        7,
+        3,
+        40,
+        1,
+        2,
+        12
+      ],
+      [
+        8,
+        0,
+        0,
+        0,
+        4,
+        0,
+        6,
+        39,
+        3,
+        7
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        84,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        0,
+        4,
+        5,
+        16,
+        0,
+        7,
+        35
+      ]
+    ],
+    "classes": [
+      "crack_initiation",
+      "crack_growth",
+      "crack_friction",
+      "hail_crack",
+      "hail",
+      "rain",
+      "wind_rattle",
+      "thermal_tick",
+      "emi_burst",
+      "handling_tap"
+    ],
+    "conformal_alpha": 0.1,
+    "conformal_coverage": 0.68,
+    "conformal_mean_set_size": 1.605,
+    "model_file": "models\\ae_feature_classifier.joblib",
+    "model_sha256": "ed661afcb906a1d78baac61daefd6a52a8bb324d3c4752b95265162832a5afea"
+  },
+  "new_fracture_detection": {
+    "f1_at_0.5": 0.6963855421686747,
+    "precision_at_0.5": 0.9475409836065574,
+    "recall_at_0.5": 0.5504761904761905,
+    "pr_auc": 0.9105481924167778,
+    "ece": 0.1735685199976318,
+    "crack_trigger_rate": 0.7733333333333333,
+    "noise_triggers_per_module_day_assumption": 10000,
+    "evt_threshold": {
+      "threshold": 1.0079838159670165,
+      "method": "gpd",
+      "shape": -0.7738184111050312,
+      "scale": 0.6699062200263733,
+      "n_tail": 36
+    },
+    "recall_at_1_far_per_module_day": 0.0,
+    "n_noise_events_triggered": 353
+  },
+  "open_set": {
+    "withheld_class": "handling_tap",
+    "unknown_detection_rate_on_withheld": 0.3382352941176471,
+    "false_unknown_rate_on_known": 0.1759656652360515,
+    "withheld_called_new_fracture_rate": 0.014705882352941176
+  },
+  "deep_model": {
+    "macro_f1": 0.5529587813985393,
+    "accuracy": 0.565,
+    "ece_top_label": 0.23658636832237243,
+    "per_class_f1": {
+      "crack_initiation": 0.6318407960199005,
+      "crack_growth": 0.6433566433566434,
+      "crack_friction": 0.6794871794871796,
+      "hail_crack": 0.22058823529411764,
+      "hail": 0.2692307692307692,
+      "rain": 0.5507246376811594,
+      "wind_rattle": 0.3828125,
+      "thermal_tick": 0.6666666666666667,
+      "emi_burst": 0.9940828402366864,
+      "handling_tap": 0.4907975460122699
+    },
+    "device": "cuda",
+    "ensemble_macro_f1": 0.6000655913878022
+  },
+  "localization_tier0_heldout": {
+    "median_error_mm": 35.133858585719594,
+    "p90_error_mm": 643.9804287261665,
+    "cell_id_accuracy": 0.511049723756906,
+    "n_localized": 362,
+    "by_module": {
+      "MOD-4-BIFACIAL72": {
+        "median_error_mm": 198.23101445475805,
+        "p90_error_mm": 670.7304064170044,
+        "cell_id_accuracy": 0.2887323943661972,
+        "n_localized": 142
+      },
+      "MOD-5-HOT65C": {
+        "median_error_mm": 13.319933561124355,
+        "p90_error_mm": 631.7825543395268,
+        "cell_id_accuracy": 0.6545454545454545,
+        "n_localized": 220
+      }
+    }
+  },
+  "localization_tier1": {
+    "n_events": 6,
+    "median_err_mm": 5.775158280103904,
+    "p90_err_mm": 7.22706349053346,
+    "errors_mm": [
+      7.1986804235812665,
+      2.207134538099391,
+      5.291591022016143,
+      6.2587255381916655,
+      7.255446557485653,
+      3.777290255846154
+    ],
+    "setup": "reflecting edges, dx=5 mm, f0=100 kHz Ricker, gated TDOA"
+  },
+  "targets": {
+    "recall_at_1_far": 0.98,
+    "macro_f1": 0.95,
+    "loc_median_mm": 15.0,
+    "loc_p90_mm": 40.0,
+    "cell_id_accuracy": 0.95,
+    "ece": 0.05
+  },
+  "target_status": {
+    "recall_at_1_far": false,
+    "macro_f1": false,
+    "loc_median_mm": false,
+    "loc_p90_mm": false,
+    "cell_id_accuracy": false,
+    "ece": false
+  },
+  "caveat": "Simulation-only (Tier-0 synthetic data). No real PV AE data exist yet; these numbers are not field performance claims (see docs/research/CODEBASE_EVALUATION.md \u00a76)."
+}

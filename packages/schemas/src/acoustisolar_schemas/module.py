@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Literal, Optional
+from typing import List, Literal
 
 class LayerConfig(BaseModel):
     """Configuration for a single material layer in the PV laminate stack."""

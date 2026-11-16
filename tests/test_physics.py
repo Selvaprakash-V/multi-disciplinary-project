@@ -1,4 +1,3 @@
-import pytest
 import numpy as np
 from acoustisolar_physics.materials import GLASS_MATERIAL
 from acoustisolar_physics.lamb import LambDispersionSolver

@@ -11,7 +11,6 @@ Validates:
 
 import hashlib
 import numpy as np
-import pytest
 
 from acoustisolar_physics.materials import GLASS_MATERIAL
 from acoustisolar_physics.lamb import LambDispersionSolver

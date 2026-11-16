@@ -44,13 +44,13 @@ Every parameter is classified into one of three rigorous verification tiers:
 | Source Mechanism | Parameter | Value | Unit | Status & Source / Calibration Target |
 | :--- | :--- | :--- | :--- | :--- |
 | **Microcrack Fracture** | Energy Release | 0.5 - 3.0 | a.u. ($10^{-7} - 10^{-5}$ J) | `[SOURCED: Scruby, Wadley & Hill (1985), "Quantitative AE in Brittle Fracture"]` |
-| | Rise Time $\tau_r$ | 0.8 - 3.5 | $\mu$s | `[SOURCED: ASTM E1106 "Primary Calibration of AE Sensors"]` Griffith cleavage crack velocity $v_c \approx 0.38 c_R \approx 1200\text{ m/s}$. For $2 - 5\text{ mm}$ crack length, duration is $1.5 - 4\ \mu\text{s}$. |
-| | Frequency Centroid | 180 - 320 | kHz | `[SOURCED: Köntges et al. (2014), IEA-PVPS Task 13 "Review of Failures in PV Modules"]` In-situ mechanical four-point bend testing of solar cells. |
-| | Radiation Pattern | Dipole / In-Plane Moment | - | `[SOURCED: Rose (1999), Chap 12]` Cleavage along (111) Si slip planes couples $> 75\%$ of energy into $S_0$ Lamb mode. |
-| **Crack Friction** | Duration | 50 - 200 | $\mu$s | `[SOURCED: ASTM E976 Section 6.2]` Inter-crack face rubbing during mechanical wind cycling. |
-| | Spectral Peak | 60 - 140 | kHz | `[SOURCED: ISO 12716 "Acoustic Emission Testing of PV Laminates"]` Low-frequency burst emission. |
-| **Thermal Stacking Noise** | Duration | 100 - 500 | $\mu$s | `[SOURCED: IEC 61215 MQT 11 Thermal Cycling]` Stick-slip delamination between EVA and glass frame. |
-| | Spectral Range | 20 - 90 | kHz | `[SOURCED: ISO 12716]` |
+| | Rise Time $\tau_r$ | 0.8 - 3.5 | $\mu$s | `[UNSOURCED]` (re-tagged 2026-11: ASTM E1106 is a sensor-calibration standard and gives no crack rise times; the estimate below is a physical argument) Griffith cleavage crack velocity $v_c \approx 0.38 c_R \approx 1200\text{ m/s}$. For $2 - 5\text{ mm}$ crack length, duration is $1.5 - 4\ \mu\text{s}$. |
+| | Frequency Centroid | 180 - 320 | kHz | `[UNSOURCED]` / `[CALIBRATE]` (re-tagged 2026-11: the IEA-PVPS Task 13 failure review contains no AE spectra; no peer-reviewed AE spectra for framed c-Si modules were found — see docs/research/LITERATURE_REVIEW.md). |
+| | Radiation Pattern | Dipole / In-Plane Moment | - | Modelled as an in-plane force dipole in the silicon layer; modal excitation (A0 vs S0) now follows from the SAFE mode shapes rather than a fixed 75/25 split. The 75 % S0 figure is `[UNSOURCED]`. |
+| **Crack Friction** | Duration | 50 - 200 | $\mu$s | `[UNSOURCED]` (re-tagged 2026-11: ASTM E976 concerns AE sensor response reproducibility) Inter-crack face rubbing during wind cycling. |
+| | Spectral Peak | 60 - 140 | kHz | `[UNSOURCED]` (re-tagged 2026-11: ISO 12716 is the general AE *vocabulary* standard, not a PV-laminate test method) |
+| **Thermal Stacking Noise** | Duration | 100 - 500 | $\mu$s | `[UNSOURCED]` (IEC 61215 MQT 11 defines the thermal-cycling test, not AE durations) Stick-slip between laminate and frame; now located at the frame edge in simulation. |
+| | Spectral Range | 20 - 90 | kHz | `[UNSOURCED]` (see ISO 12716 note above) |
 
 ---
 
@@ -95,3 +95,21 @@ Every parameter is classified into one of three rigorous verification tiers:
    - *Status:* `[UNSOURCED]` / `[CALIBRATE]`
    - *Impact on Model:* False Alarm Rate (FAR) baseline per module-day depends directly on real environmental noise (sand impact, rain drops, wind gust frame flexing, central inverter IGBT switching harmonics at 16–32 kHz).
    - *Calibration Procedure:* 30-day baseline continuous waveform logging on a utility-scale string (IEC 61215 field test).
+
+---
+
+## 5. Modelling Assumptions Added in the 2026-11 Revision
+
+| Area | Assumption | Status |
+| :--- | :--- | :--- |
+| Laminate dispersion | A0/S0 phase & group velocity from the corrected multilayer SAFE solver; EVA storage modulus evaluated at 150 kHz and scaled so the configured `youngs_modulus_gpa` is the 25 °C anchor | `[CALIBRATE]` |
+| Attenuation | Modal strain-energy method: $\eta_{mode} = \sum_l (U_l^{shear}/U)\,\eta_l$, $lpha = \eta\,\omega/(2c_g)$; only the *shear* strain energy of polymer layers is lossy (bulk assumed elastic) | `[CALIBRATE]` (pitch-catch, -20 to 75 °C) |
+| EVA temperature shift | Hybrid: WLF (universal constants $C_1$=17.44, $C_2$=51.6, referenced to $T_g$) below $T_g$+50 °C, Arrhenius above, joined continuously | `[CALIBRATE]` (DMA) |
+| Source coupling | Cracks: in-plane force dipole in Si; rain/hail/taps/rattle: normal force on glass; frame stick-slip: in-plane force in glass; EMI: electrical, simultaneous on all channels | Physics-motivated, `[UNSOURCED]` levels |
+| Receiver | PZT disc senses out-of-plane surface displacement of each mode; disc aperture $2J_1(ka)/(ka)$ | Standard transducer model |
+| Frame | Image-source reflections, order 2 per axis, reflection coefficient randomised 0.3-0.75 | `[CALIBRATE]` (depends on frame/clamp) |
+| Absolute level | Unit-energy crack at 0.5 m → 2e-4 m/s peak surface velocity (~70 dB_AE); source levels log-uniform over ~30 dB | `[CALIBRATE]` (pencil-lead breaks) |
+| Family levels | Hail ×18, tap ×4, rattle ×0.6, thermal tick ×0.6, rain drops ×0.35 relative to a crack | `[UNSOURCED]` |
+| Ambient noise | 1/f-shaped broadband + inverter harmonics 16-32 kHz, level log-uniform | `[UNSOURCED]` → field logging |
+| Noise trigger rate | 10,000 noise triggers per module-day (used to convert FPR to false alarms/day) | `[UNSOURCED]` |
+| Numerical | Tier-0 applies a causality mute before onset + r/v_max (removes a ~-50 dB numerical precursor of the spectral model) | Numerical artefact control |

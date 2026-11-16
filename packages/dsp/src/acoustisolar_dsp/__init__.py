@@ -3,12 +3,13 @@
 from .filter import DigitalBandpassFilter
 from .pickers import OnsetPicker
 from .features import AEFeatureExtractor
-from .tdoa import TDOALocalizer
+from .tdoa import DeltaTMapLocalizer, TDOALocalizer
 
 __all__ = [
     "DigitalBandpassFilter",
     "OnsetPicker",
     "AEFeatureExtractor",
     "TDOALocalizer",
+    "DeltaTMapLocalizer",
 ]
 

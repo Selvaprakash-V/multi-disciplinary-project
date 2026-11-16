@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
-from typing import Dict, List, Literal, Optional
+from typing import List, Literal, Optional
 from .source import CrackType, NoiseClass, SourceClass
 
 class TriggerFeatures(BaseModel):
@@ -13,9 +13,43 @@ class TriggerFeatures(BaseModel):
     energy_au: float = Field(..., ge=0.0, description="Integrated squared voltage (AE energy)")
     centroid_khz: float = Field(..., ge=0.0, description="Spectral centroid frequency in kHz")
     peak_freq_khz: float = Field(default=0.0, ge=0.0, description="Peak spectral frequency in kHz")
+    ra_us_per_mv: float = Field(default=0.0, ge=0.0, description="RA value: rise time / amplitude (us/mV)")
+    avg_freq_khz: float = Field(default=0.0, ge=0.0, description="Average frequency: counts / duration (kHz)")
+    partial_powers: List[float] = Field(
+        default_factory=lambda: [0.0, 0.0, 0.0, 0.0],
+        description="Fraction of spectral power in 50-100, 100-150, 150-250, 250-400 kHz",
+    )
+    early_late_ratio_db: float = Field(
+        default=0.0, description="Energy in 25 us after first arrival vs next 225 us (S0/A0 proxy), dB"
+    )
+    onset_sample: int = Field(default=-1, description="First-arrival sample index (-1 if none)")
+
+EVENT_CLASSES = [
+    "crack_initiation",
+    "crack_growth",
+    "crack_friction",
+    "hail_crack",
+    "hail",
+    "rain",
+    "wind_rattle",
+    "thermal_tick",
+    "emi_burst",
+    "handling_tap",
+]
+NEW_FRACTURE_CLASSES = {"crack_initiation", "crack_growth", "hail_crack"}
+CRACK_ACTIVITY_CLASSES = NEW_FRACTURE_CLASSES | {"crack_friction"}
+
 
 class GroundTruthLabel(BaseModel):
-    """Ground-truth metadata for synthetic or verified lab events."""
+    """Ground-truth metadata for synthetic or verified lab events.
+
+    ``event_class`` is the multi-class label (see ``EVENT_CLASSES``).  ``is_new_fracture``
+    marks events that create new fracture surface (initiation, growth, hail-induced crack);
+    crack *friction* is activity of an existing crack — relevant for health trending but not
+    a new fracture.
+    """
+    event_class: Optional[str] = None
+    is_new_fracture: Optional[bool] = None
     source_class: SourceClass
     crack_type: CrackType = CrackType.NONE
     noise_class: NoiseClass = NoiseClass.NONE

@@ -667,6 +667,9 @@
       if (ml.is_crack_pred === 1) {
         banner.className = 'verdict-banner verdict-crack';
         document.getElementById('verdictText').innerText = '🚨 ' + ml.verdict;
+      } else if (ml.is_crack_pred === -1) {
+        banner.className = 'verdict-banner';
+        document.getElementById('verdictText').innerText = '⚠️ ' + ml.verdict;
       } else {
         banner.className = 'verdict-banner verdict-noise';
         document.getElementById('verdictText').innerText = '✅ ' + ml.verdict;

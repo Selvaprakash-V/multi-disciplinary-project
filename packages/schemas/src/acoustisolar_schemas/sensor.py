@@ -26,3 +26,19 @@ class SensorArrayConfig(BaseModel):
     )
     disc: PZTDiscConfig = Field(default_factory=PZTDiscConfig)
 
+    @classmethod
+    def for_module(cls, width_mm: float, length_mm: float, inset_mm: float = 60.0, **kwargs) -> "SensorArrayConfig":
+        """Four corner sensors inset from the frame of a module of the given size.
+
+        Using the 1040 x 1760 mm default positions on larger modules leaves part of the
+        module outside the sensor array, which inflates localisation error for purely
+        geometric reasons.
+        """
+        positions = [
+            (inset_mm, inset_mm),
+            (inset_mm, length_mm - inset_mm),
+            (width_mm - inset_mm, inset_mm),
+            (width_mm - inset_mm, length_mm - inset_mm),
+        ]
+        return cls(count=4, positions_mm=positions, **kwargs)
+

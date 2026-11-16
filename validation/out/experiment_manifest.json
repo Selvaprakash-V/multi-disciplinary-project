@@ -1,0 +1,45 @@
+{
+  "experiment_name": "AcoustiSolar-Verification",
+  "run_id": "run-1794804677",
+  "timestamp_utc": "2026-11-16T04:51:17Z",
+  "parameters": {
+    "code_git_sha": "cabbab07fd2bda0e501cf1485f9b305f550e9f4c",
+    "config_hash": "5c16930476f1d2aedf32e5fe290a3771a19f8333c7ad14af299adbe65447107f",
+    "n_train": 1500,
+    "n_test": 1000,
+    "train_modules": "MOD-1-STD120,MOD-2-LARGE144,MOD-3-UTIL60",
+    "test_modules": "MOD-4-BIFACIAL72,MOD-5-HOT65C",
+    "noise_triggers_per_module_day_assumption": 10000
+  },
+  "metrics": {
+    "macro_f1_feature_model": 0.532478366350199,
+    "macro_f1_ci_low": 0.5008449212591248,
+    "macro_f1_ci_high": 0.5605224204901721,
+    "ece_top_label": 0.2049716001605896,
+    "conformal_coverage": 0.68,
+    "new_fracture_pr_auc": 0.9105481924167778,
+    "new_fracture_f1": 0.6963855421686747,
+    "recall_at_1_far_per_module_day": 0.0,
+    "localization_median_mm": 35.133858585719594,
+    "localization_p90_mm": 643.9804287261665,
+    "cell_id_accuracy": 0.511049723756906,
+    "tier1_localization_median_mm": 5.775158280103904,
+    "safe_laminate_s0_change_pct": -1.0442716685798759,
+    "macro_f1_cnn": 0.5529587813985393
+  },
+  "vv_summary": "PASS_WITH_KNOWN_GAPS",
+  "target_status": {
+    "recall_at_1_far": false,
+    "macro_f1": false,
+    "loc_median_mm": false,
+    "loc_p90_mm": false,
+    "cell_id_accuracy": false,
+    "ece": false
+  },
+  "sources": {
+    "benchmark": "validation\\kpi_benchmark_summary.json",
+    "physics": "validation\\physics_verification_results.json",
+    "vv": "validation\\out\\vv_suite_results.json",
+    "reproducibility": "data\\reproducibility_proof.json"
+  }
+}

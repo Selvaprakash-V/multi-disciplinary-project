@@ -3,955 +3,1287 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AcoustiSolar | Ultrasonic AE Digital Twin & Micro-Crack Diagnostic Platform</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <title>Solar Panel Defect & Micro-Crack Detection System</title>
   <style>
     :root {
-      --bg: #0b0f17;
-      --card-bg: #111827;
-      --card-border: #1f2937;
-      --accent: #38bdf8;
-      --accent-glow: rgba(56, 189, 248, 0.25);
-      --danger: #ef4444;
-      --danger-glow: rgba(239, 68, 68, 0.3);
-      --success: #10b981;
-      --success-glow: rgba(16, 185, 129, 0.3);
-      --warning: #f59e0b;
-      --text-main: #f3f4f6;
-      --text-muted: #9ca3af;
-      --solar-blue: #0284c7;
-      --solar-cell: #1e293b;
-      --solar-cell-border: #334155;
+      --bg: #ffffff;
+      --bg-subtle: #f8fafc;
+      --bg-card: #ffffff;
+      --border: #e2e8f0;
+      --border-dark: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --text-dim: #94a3b8;
+      --primary: #0f172a;
+      --primary-hover: #1e293b;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --danger-border: #fecaca;
+      --success: #15803d;
+      --success-bg: #f0fdf4;
+      --success-border: #bbf7d0;
+      --warning: #b45309;
+      --warning-bg: #fffbeb;
+      --warning-border: #fef3c7;
+      --solar-blue: #1e3a8a;
+      --solar-cell-bg: #1e293b;
+      --solar-cell-hover: #2d3748;
+      --sensor-color: #0284c7;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Inter', sans-serif;
-      background: var(--bg);
-      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg-subtle);
+      color: var(--text);
+      line-height: 1.5;
+      font-size: 14px;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      overflow-x: hidden;
     }
 
-    /* Top Navigation */
+    /* Header */
     header {
-      background: rgba(17, 24, 39, 0.95);
-      backdrop-filter: blur(8px);
-      border-bottom: 1px solid var(--card-border);
-      padding: 12px 24px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       position: sticky;
       top: 0;
-      z-index: 100;
+      z-index: 50;
     }
 
-    .brand {
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--text);
+    }
+    .brand-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    .system-status {
       display: flex;
       align-items: center;
       gap: 12px;
+      font-size: 12px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 11px;
+      background: #f1f5f9;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .status-badge.online {
+      background: #f0fdf4;
+      color: #166534;
+      border-color: #bbf7d0;
     }
 
-    .brand-icon {
-      width: 32px;
-      height: 32px;
-      background: linear-gradient(135deg, #38bdf8, #0284c7);
-      border-radius: 8px;
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      gap: 20px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 12px 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .tab-btn:hover {
+      color: var(--text);
+    }
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      padding: 24px 28px;
+      max-width: 1440px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Two-column layout */
+    .grid-2col {
+      display: grid;
+      grid-template-columns: 480px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 1080px) {
+      .grid-2col {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-header h2 {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+    .card-header .subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 400;
+      text-transform: none;
+    }
+    .card-body {
+      padding: 16px;
+    }
+
+    /* Solar Panel Visualization */
+    .panel-container {
+      position: relative;
+      background: #f1f5f9;
+      border: 2px solid #94a3b8;
+      border-radius: 4px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      user-select: none;
+    }
+    .panel-frame {
+      width: 100%;
+      height: 640px;
+      background: #0f172a;
+      border: 6px solid #475569;
+      border-radius: 2px;
+      position: relative;
+      cursor: crosshair;
+      overflow: hidden;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    }
+    .solar-grid {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      grid-template-rows: repeat(20, 1fr);
+      gap: 2px;
+      background: #334155;
+      padding: 3px;
+    }
+    .solar-cell {
+      background: #1e293b;
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: background 0.15s ease;
+    }
+    .solar-cell:hover {
+      background: #334155;
+    }
+    .solar-cell.cell-damaged {
+      background: #991b1b !important;
+      border-color: #ef4444 !important;
+    }
+    .solar-cell.cell-selected {
+      outline: 2px solid #ffffff;
+      outline-offset: -2px;
+    }
+
+    /* Busbars inside cells */
+    .solar-cell::before, .solar-cell::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .solar-cell::before { left: 33%; }
+    .solar-cell::after { left: 66%; }
+
+    /* Sensor Markers */
+    .sensor-marker {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      background: #ffffff;
+      border: 2px solid #0f172a;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
+      font-size: 9px;
       font-weight: 800;
-      font-size: 18px;
-      color: white;
-      box-shadow: 0 0 16px var(--accent-glow);
+      color: #0f172a;
+      font-family: monospace;
+      z-index: 10;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
     }
 
-    .brand h1 {
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-    }
-
-    .brand p {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    .engine-status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-      padding: 6px 14px;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.3);
-      border-radius: 20px;
-      color: #34d399;
-    }
-
-    .pulse-dot {
-      width: 8px;
-      height: 8px;
-      background: #10b981;
+    /* Impact and Localization Marks */
+    .impact-mark {
+      position: absolute;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
-      box-shadow: 0 0 8px #10b981;
-      animation: pulse 1.8s infinite;
+      background: #ef4444;
+      border: 2px solid #ffffff;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 15;
+    }
+    .loc-mark {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border: 2px dashed #38bdf8;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 14;
+    }
+    .wave-ripple {
+      position: absolute;
+      border: 2px solid rgba(239, 68, 68, 0.7);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 12;
+      animation: ripple 0.8s ease-out forwards;
+    }
+    @keyframes ripple {
+      0% { width: 4px; height: 4px; opacity: 1; }
+      100% { width: 340px; height: 340px; opacity: 0; }
     }
 
-    @keyframes pulse {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.3); opacity: 1; }
-      100% { transform: scale(0.95); opacity: 0.8; }
+    /* Controls & Forms */
+    .form-group {
+      margin-bottom: 14px;
     }
-
-    /* Preset Scenarios Toolbar */
-    .scenario-bar {
-      background: #0f172a;
-      border-bottom: 1px solid var(--card-border);
-      padding: 10px 24px;
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .scenario-label {
-      font-size: 12px;
+    .form-label {
+      display: block;
+      font-size: 11px;
       font-weight: 600;
-      color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .form-select, .form-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border-dark);
+      border-radius: 4px;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .form-select:focus, .form-input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
     }
 
     .btn {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      color: var(--text-main);
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      transition: all 0.2s ease;
-    }
-
-    .btn:hover {
-      background: #1e293b;
-      border-color: var(--accent);
-      transform: translateY(-1px);
-    }
-
-    .btn-tour {
-      background: linear-gradient(135deg, #0284c7, #2563eb);
-      border: none;
-      color: white;
-      font-weight: 600;
-      box-shadow: 0 2px 10px var(--accent-glow);
-    }
-    .btn-tour:hover {
-      background: linear-gradient(135deg, #0369a1, #1d4ed8);
-    }
-
-    /* Main Grid Layout */
-    .dashboard {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 360px 1fr 340px;
-      gap: 16px;
-      padding: 16px 24px;
-    }
-
-    .panel {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-    }
-
-    .panel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--card-border);
-    }
-
-    .panel-title {
-      font-size: 13px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      color: #94a3b8;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    /* Left Panel: Module Visualizer Canvas */
-    .module-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      position: relative;
-    }
-
-    #moduleCanvas {
-      background: #020617;
-      border: 2px solid #334155;
-      border-radius: 8px;
-      cursor: crosshair;
-      box-shadow: 0 0 24px rgba(0, 0, 0, 0.6);
-      width: 100%;
-      height: 480px;
-      touch-action: none;
-    }
-
-    .canvas-hint {
-      margin-top: 8px;
-      font-size: 11px;
-      color: var(--text-muted);
-      text-align: center;
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    .legend {
-      margin-top: 12px;
-      display: flex;
-      gap: 10px;
       justify-content: center;
-      flex-wrap: wrap;
-      font-size: 11px;
-    }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-
-    .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-    }
-    .dot-sensor { background: #38bdf8; border: 1px solid white; }
-    .dot-true { background: #ef4444; }
-    .dot-recon { background: #3b82f6; border: 1px dashed white; }
-
-    /* Middle Panel: Oscilloscope */
-    .osc-container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    #oscCanvas {
-      width: 100%;
-      height: 380px;
-      background: #050811;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-    }
-
-    .osc-controls {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      margin-top: 6px;
-    }
-
-    .ch-card {
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      padding: 8px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-
-    .ch-card.ch1 { border-left: 3px solid #38bdf8; }
-    .ch-card.ch2 { border-left: 3px solid #f43f5e; }
-    .ch-card.ch3 { border-left: 3px solid #10b981; }
-    .ch-card.ch4 { border-left: 3px solid #fbbf24; }
-
-    /* Right Panel: HUD & ML Diagnosis */
-    .verdict-banner {
-      padding: 14px;
-      border-radius: 8px;
-      text-align: center;
-      font-weight: 800;
-      font-size: 15px;
-      margin-bottom: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      transition: all 0.3s ease;
-    }
-
-    .verdict-crack {
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid var(--danger);
-      color: #f87171;
-      box-shadow: 0 0 20px var(--danger-glow);
-    }
-
-    .verdict-noise {
-      background: rgba(16, 185, 129, 0.15);
-      border: 1px solid var(--success);
-      color: #34d399;
-      box-shadow: 0 0 20px var(--success-glow);
-    }
-
-    .metric-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 12px;
-    }
-
-    .metric-card {
-      background: #0f172a;
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .metric-title {
-      font-size: 10px;
-      color: var(--text-muted);
-      text-transform: uppercase;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 13px;
       font-weight: 600;
-      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+      text-decoration: none;
+      border: 1px solid transparent;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary);
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+    .btn-secondary {
+      background: #ffffff;
+      color: var(--text);
+      border-color: var(--border-dark);
+    }
+    .btn-secondary:hover {
+      background: #f1f5f9;
+    }
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 11px;
+    }
+    .btn-block {
+      width: 100%;
     }
 
-    .metric-val {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 18px;
-      font-weight: 700;
-      margin-top: 4px;
-      color: #f8fafc;
+    /* Results Banner */
+    .verdict-box {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background: #ffffff;
     }
-
-    .metric-sub {
-      font-size: 10px;
-      color: var(--text-muted);
-      margin-top: 2px;
+    .verdict-box.defect {
+      border-left: 4px solid var(--danger);
+      background: var(--danger-bg);
     }
-
-    .prob-bar-container {
-      background: #0f172a;
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
+    .verdict-box.normal {
+      border-left: 4px solid var(--success);
+      background: var(--success-bg);
     }
-
-    .prob-bar-header {
+    .verdict-header {
       display: flex;
       justify-content: space-between;
-      font-size: 11px;
-      font-weight: 600;
+      align-items: center;
       margin-bottom: 6px;
     }
+    .verdict-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+    }
+    .verdict-box.defect .verdict-title { color: #991b1b; }
+    .verdict-box.normal .verdict-title { color: #166534; }
 
-    .prob-bar-track {
-      width: 100%;
-      height: 8px;
-      background: #1e293b;
+    .verdict-desc {
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    /* Metric Grid */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .metric-card {
+      border: 1px solid var(--border);
       border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .prob-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #10b981, #ef4444);
-      width: 50%;
-      transition: width 0.4s ease;
-    }
-
-    .hud-section {
-      background: #0f172a;
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
       padding: 10px;
-      font-size: 11px;
-      font-family: 'JetBrains Mono', monospace;
-      margin-bottom: 10px;
+      background: var(--bg);
     }
-
-    .hud-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 3px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    .metric-card .label {
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 2px;
     }
-    .hud-row:last-child { border-bottom: none; }
-
-    /* Bottom Verification Audit Tab */
-    .audit-bar {
-      background: #0b1120;
-      border-top: 1px solid var(--card-border);
-      padding: 10px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 11px;
-      font-family: 'JetBrains Mono', monospace;
+    .metric-card .value {
+      font-size: 16px;
+      font-weight: 700;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      color: var(--text);
+    }
+    .metric-card .unit {
+      font-size: 10px;
+      font-weight: 400;
       color: var(--text-muted);
     }
 
-    .badge-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px 8px;
+    /* Oscilloscope / Waveform Viewer */
+    .scope-box {
+      background: #0f172a;
+      border: 1px solid #334155;
       border-radius: 4px;
+      padding: 12px;
+      color: #f8fafc;
+      font-family: monospace;
+    }
+    .scope-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+    canvas {
+      width: 100%;
+      height: 180px;
+      display: block;
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 2px;
+    }
+
+    /* Image Inspection Section */
+    .dropzone {
+      border: 2px dashed var(--border-dark);
+      border-radius: 6px;
+      padding: 32px 20px;
+      text-align: center;
+      background: var(--bg);
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--primary);
+      background: #f1f5f9;
+    }
+    .dropzone input {
+      display: none;
+    }
+    .dropzone-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .dropzone-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .preset-selector {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 14px 0 20px 0;
+    }
+    .preset-btn {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 8px;
+      background: var(--bg);
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .preset-btn:hover {
+      border-color: var(--primary);
+      background: #f8fafc;
+    }
+    .preset-btn.active {
+      border-color: var(--primary);
+      background: #0f172a;
+      color: #ffffff;
+    }
+    .preset-btn.active .preset-title, .preset-btn.active .preset-tag {
+      color: #ffffff;
+    }
+    .preset-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .preset-tag {
       font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
       font-weight: 600;
     }
-    .badge-green { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-    .badge-blue { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+
+    .image-preview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .image-view-card {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    .image-view-header {
+      padding: 6px 10px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .image-view-body {
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f1f5f9;
+      min-height: 320px;
+    }
+    .image-view-body img {
+      max-width: 100%;
+      max-height: 380px;
+      border-radius: 2px;
+      border: 1px solid var(--border);
+      background: #ffffff;
+    }
+
+    /* History Table */
+    .table-container {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-size: 10px;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+    tr:hover td {
+      background: #f8fafc;
+    }
+    .badge-defect {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 700;
+      font-size: 10px;
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+    .badge-pass {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 700;
+      font-size: 10px;
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+
+    /* Helper styles */
+    .text-mono {
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+    .mt-12 { margin-top: 12px; }
+    .mt-16 { margin-top: 16px; }
+    .mb-12 { margin-bottom: 12px; }
   </style>
 </head>
 <body>
 
-  <!-- Top Navigation Header -->
+  <!-- Header -->
   <header>
-    <div class="brand">
-      <div class="brand-icon">⚡</div>
-      <div>
-        <h1>AcoustiSolar Digital Twin</h1>
-        <p>Simulation-First PV Acoustic Emission Fracture Diagnostics | PRD Phase 0–1</p>
-      </div>
+    <div>
+      <div class="brand-title">AcoustiSolar Inspection System</div>
+      <div class="brand-subtitle">Photovoltaic Module Micro-Crack Detection & Structural Diagnosis</div>
     </div>
-    <div style="display: flex; gap: 16px; align-items: center;">
-      <div class="engine-status">
-        <div class="pulse-dot"></div>
-        <span>PHY-ENGINE: ACTIVE | 1.0 MSPS DAQ</span>
-      </div>
+    <div class="system-status">
+      <span>SERVER: <span class="text-mono">127.0.0.1:8000</span></span>
+      <span class="status-badge online" id="serverStatusBadge">SYSTEM ONLINE</span>
     </div>
   </header>
 
-  <!-- Scenario Quick Selector Toolbar -->
-  <div class="scenario-bar">
-    <span class="scenario-label">Judge Presets:</span>
-    <button class="btn" onclick="triggerPreset('crack_center')">💥 Scenario 1: Thermal Fatigue Crack (Center Cell)</button>
-    <button class="btn" onclick="triggerPreset('crack_busbar')">⚡ Scenario 2: Busbar Shear Cleavage</button>
-    <button class="btn" onclick="triggerPreset('noise_rain')">🌧️ Scenario 3: Heavy Rain Noise Rejection</button>
-    <button class="btn" onclick="triggerPreset('noise_inverter')">⚙️ Scenario 4: Inverter 20kHz PWM Transient</button>
-    <button class="btn btn-tour" onclick="startAutoTour()">🚀 Run Interactive Tour for Judge</button>
+  <!-- Navigation Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="tab-simulation" onclick="switchTab('tab-simulation')">Structural Simulation</button>
+    <button class="tab-btn" data-tab="tab-optical" onclick="switchTab('tab-optical')">Optical / EL Image Inspection</button>
+    <button class="tab-btn" data-tab="tab-reports" onclick="switchTab('tab-reports')">Inspection Log</button>
   </div>
 
-  <!-- Main 3-Column Dashboard -->
-  <div class="dashboard">
+  <main>
+    <!-- TAB 1: SOLAR PANEL PHYSICAL SIMULATION -->
+    <div id="tab-simulation" class="tab-content active">
+      <div class="grid-2col">
 
-    <!-- Column 1: Interactive PV Solar Panel -->
-    <div class="panel">
-      <div class="panel-header">
-        <span class="panel-title">☀️ PV Module Map (120 Cells)</span>
-        <span style="font-size: 11px; color: var(--accent); font-family: 'JetBrains Mono', monospace;">1040 &times; 1760 mm</span>
-      </div>
-      <div class="module-container">
-        <canvas id="moduleCanvas" width="320" height="520"></canvas>
-        <p class="canvas-hint">Click anywhere on the module to inject an acoustic event</p>
-        <div class="legend">
-          <div class="legend-item"><div class="dot dot-sensor"></div><span>PZT Sensors (S1-S4)</span></div>
-          <div class="legend-item"><div class="dot dot-true"></div><span>True Epicenter</span></div>
-          <div class="legend-item"><div class="dot dot-recon"></div><span>TDOA Estimate</span></div>
-        </div>
-      </div>
-    </div>
+        <!-- Left: Interactive PV Module -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2>PV Module Array Map</h2>
+              <div class="subtitle">Click anywhere on the module to simulate a crack event or impact</div>
+            </div>
+            <span class="status-badge">60-CELL MONO</span>
+          </div>
+          <div class="card-body">
+            <div class="panel-container">
+              <div class="panel-frame" id="pvFrame" onclick="handlePanelClick(event)">
+                <div class="solar-grid" id="solarGrid"></div>
 
-    <!-- Column 2: 4-Channel Virtual Oscilloscope -->
-    <div class="panel">
-      <div class="panel-header">
-        <span class="panel-title">📈 4-Channel PZT Transducer Oscilloscope</span>
-        <span style="font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">2.56 ms Window | 14-Bit ADC</span>
-      </div>
-      <div class="osc-container">
-        <canvas id="oscCanvas" width="800" height="380"></canvas>
-        <div class="osc-controls">
-          <div class="ch-card ch1">
-            <strong>Ch 1 (BL):</strong> <span id="ch1Peak">--</span> mV<br>
-            <span style="color:var(--text-muted)">Arrival:</span> <span id="ch1Arrival">--</span> &mu;s
-          </div>
-          <div class="ch-card ch2">
-            <strong>Ch 2 (TL):</strong> <span id="ch2Peak">--</span> mV<br>
-            <span style="color:var(--text-muted)">Arrival:</span> <span id="ch2Arrival">--</span> &mu;s
-          </div>
-          <div class="ch-card ch3">
-            <strong>Ch 3 (BR):</strong> <span id="ch3Peak">--</span> mV<br>
-            <span style="color:var(--text-muted)">Arrival:</span> <span id="ch3Arrival">--</span> &mu;s
-          </div>
-          <div class="ch-card ch4">
-            <strong>Ch 4 (TR):</strong> <span id="ch4Peak">--</span> mV<br>
-            <span style="color:var(--text-muted)">Arrival:</span> <span id="ch4Arrival">--</span> &mu;s
+                <!-- 4 PZT Sensors -->
+                <div class="sensor-marker" style="left: 6%; top: 4%;">S1</div>
+                <div class="sensor-marker" style="left: 6%; top: 96%;">S2</div>
+                <div class="sensor-marker" style="left: 94%; top: 4%;">S3</div>
+                <div class="sensor-marker" style="left: 94%; top: 96%;">S4</div>
+
+                <!-- Dynamic Markers -->
+                <div id="impactMarker" class="impact-mark" style="display: none;"></div>
+                <div id="locMarker" class="loc-mark" style="display: none;"></div>
+                <div id="waveRipple" class="wave-ripple" style="display: none;"></div>
+              </div>
+            </div>
+
+            <!-- Coordinate / Cell Indicator -->
+            <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; color: var(--text-muted);">
+              <div>Target Point: <span class="text-mono" id="dispTargetCoords">X: 520.0 mm, Y: 880.0 mm</span></div>
+              <div>Target Cell: <span class="text-mono" id="dispTargetCell">Cell (R10, C3)</span></div>
+            </div>
           </div>
         </div>
+
+        <!-- Right: Control Panel & Diagnosis -->
+        <div>
+          <!-- Diagnosis Verdict Card -->
+          <div class="card mb-12">
+            <div class="card-header">
+              <h2>Diagnostic Result</h2>
+              <span id="verdictTimestamp" class="text-mono" style="font-size: 11px; color: var(--text-muted);">Awaiting Run</span>
+            </div>
+            <div class="card-body">
+              <div id="verdictBox" class="verdict-box normal">
+                <div class="verdict-header">
+                  <span id="verdictText" class="verdict-title">READY TO SIMULATE</span>
+                  <span id="verdictConfidence" class="text-mono" style="font-size: 12px; font-weight: 700;">--</span>
+                </div>
+                <div id="verdictDetails" class="verdict-desc">Click on the PV module or press 'Execute Simulation' to test for crack formation.</div>
+              </div>
+
+              <!-- Metric Badges -->
+              <div class="metric-grid">
+                <div class="metric-card">
+                  <div class="label">Identified Cell</div>
+                  <div class="value" id="valCellId">--</div>
+                  <div class="unit" id="valCellMatch">Localization</div>
+                </div>
+                <div class="metric-card">
+                  <div class="label">Est. Crack Location</div>
+                  <div class="value" id="valEstCoords">--</div>
+                  <div class="unit">X, Y in mm</div>
+                </div>
+                <div class="metric-card">
+                  <div class="label">Position Error</div>
+                  <div class="value" id="valPosError">--</div>
+                  <div class="unit">mm from ground truth</div>
+                </div>
+                <div class="metric-card">
+                  <div class="label">Signal Peak</div>
+                  <div class="value" id="valPeakMv">--</div>
+                  <div class="unit">mV amplitude</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Simulation Settings Card -->
+          <div class="card mb-12">
+            <div class="card-header">
+              <h2>Simulation Parameters</h2>
+              <span class="subtitle">Tier-0 Digital Twin Settings</span>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Event Source Type</label>
+                <select class="form-select" id="simSourceType">
+                  <option value="crack_initiation">Silicon Crack Initiation (Brittle Wafer Cleavage)</option>
+                  <option value="crack_growth">Crack Propagation / Thermal Fatigue</option>
+                  <option value="crack_friction">Micro-Crack Friction / Rubbing</option>
+                  <option value="noise_hail">Hailstone Impact (Surface Mechanical Load)</option>
+                  <option value="noise_rain">Raindrop Impingement (Acoustic Noise)</option>
+                  <option value="noise_thermal">Thermal Expansion Tick (Frame Expansion)</option>
+                  <option value="noise_wind">Wind Load Vibration (Frame Rattle)</option>
+                  <option value="noise_inverter">Inverter Electromagnetic Burst (EMI)</option>
+                </select>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Impact Energy (a.u.)</label>
+                  <input type="number" class="form-input" id="simEnergy" value="1.5" min="0.1" max="20.0" step="0.1">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Module Temperature (°C)</label>
+                  <input type="number" class="form-input" id="simTemp" value="25.0" min="-20.0" max="85.0" step="1.0">
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 10px; margin-top: 6px;">
+                <button class="btn btn-primary" style="flex: 2;" onclick="runSimulation()">Execute Simulation</button>
+                <button class="btn btn-secondary" style="flex: 1;" onclick="setPresetSimulation('center_crack')">Center Crack</button>
+                <button class="btn btn-secondary" style="flex: 1;" onclick="setPresetSimulation('hail_impact')">Hail Load</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Oscilloscope Card -->
+          <div class="card">
+            <div class="card-header">
+              <h2>Acoustic Sensor Waveforms (TDOA)</h2>
+              <span class="subtitle">4-Channel PZT Transducer Response</span>
+            </div>
+            <div class="card-body">
+              <div class="scope-box">
+                <div class="scope-title">
+                  <span>CH1 (S1) · CH2 (S2) · CH3 (S3) · CH4 (S4)</span>
+                  <span id="scopeTdoaStats">Arrival DT: --</span>
+                </div>
+                <canvas id="scopeCanvas" width="700" height="180"></canvas>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
 
-    <!-- Column 3: Diagnostic HUD & ML Inference -->
-    <div class="panel">
-      <div class="panel-header">
-        <span class="panel-title">🤖 AI Diagnosis & TDOA Solver</span>
-        <span class="badge-pill badge-green" id="modelBadge">LightGBM</span>
-      </div>
+    <!-- TAB 2: OPTICAL / EL IMAGE INSPECTION -->
+    <div id="tab-optical" class="tab-content">
+      <div class="card mb-12">
+        <div class="card-header">
+          <div>
+            <h2>Solar Cell Image Upload & Defect Classifier</h2>
+            <div class="subtitle">Upload high-resolution optical or electroluminescence (EL) solar cell imagery for micro-crack detection</div>
+          </div>
+          <span class="status-badge">CV + FEATURE EXTRACTION</span>
+        </div>
+        <div class="card-body">
+          <!-- Preset selector buttons -->
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">
+            Test with Benchmark Samples:
+          </div>
+          <div class="preset-selector">
+            <button class="preset-btn" id="btnPresetIntact" onclick="loadPresetImage('intact')">
+              <div class="preset-title">Sample 1: Intact Wafer</div>
+              <div class="preset-tag">Defect-Free (Pass)</div>
+            </button>
+            <button class="preset-btn active" id="btnPresetMicrocrack" onclick="loadPresetImage('microcrack')">
+              <div class="preset-title">Sample 2: Micro-Crack</div>
+              <div class="preset-tag">Diagonal Fracture</div>
+            </button>
+            <button class="preset-btn" id="btnPresetCross" onclick="loadPresetImage('cross_crack')">
+              <div class="preset-title">Sample 3: Cross-Crack</div>
+              <div class="preset-tag">Impact Fracture</div>
+            </button>
+            <button class="preset-btn" id="btnPresetBusbar" onclick="loadPresetImage('busbar_fracture')">
+              <div class="preset-title">Sample 4: Busbar Break</div>
+              <div class="preset-tag">Conductor Severed</div>
+            </button>
+          </div>
 
-      <!-- Verdict Banner -->
-      <div class="verdict-banner verdict-crack" id="verdictBanner">
-        <span id="verdictText">CRACK DETECTED</span>
-        <span style="font-size: 11px; font-weight: 500;" id="verdictSub">Confidence: 98.4%</span>
-      </div>
-
-      <!-- Probability Bar -->
-      <div class="prob-bar-container">
-        <div class="prob-bar-header">
-          <span>Crack Probability</span>
-          <span id="probValue">98.4%</span>
-        </div>
-        <div class="prob-bar-track">
-          <div class="prob-bar-fill" id="probFill"></div>
-        </div>
-      </div>
-
-      <!-- Metric Cards -->
-      <div class="metric-grid">
-        <div class="metric-card">
-          <span class="metric-title">Localization Error</span>
-          <span class="metric-val" id="locErrorVal">18.4 mm</span>
-          <span class="metric-sub" id="locErrorSub">Hyperbolic TDOA</span>
-        </div>
-        <div class="metric-card">
-          <span class="metric-title">Target Cell ID</span>
-          <span class="metric-val" id="cellIdVal">R11, C3</span>
-          <span class="metric-sub" id="cellMatchSub">Matched (100%)</span>
-        </div>
-        <div class="metric-card">
-          <span class="metric-title">Centroid Freq</span>
-          <span class="metric-val" id="freqVal">242 kHz</span>
-          <span class="metric-sub">AE Band (50-400kHz)</span>
-        </div>
-        <div class="metric-card">
-          <span class="metric-title">Rise Time</span>
-          <span class="metric-val" id="riseVal">1.8 &mu;s</span>
-          <span class="metric-sub">Griffith Cleavage</span>
+          <!-- Drag and Drop upload box -->
+          <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+            <input type="file" id="fileInput" accept="image/png, image/jpeg, image/jpg" onchange="handleFileUpload(event)">
+            <div class="dropzone-title">Upload Solar Panel / Cell Image</div>
+            <div class="dropzone-hint">Drag and drop any solar cell image here, or click to browse (PNG, JPG)</div>
+          </div>
         </div>
       </div>
 
-      <!-- TDOA Hyperbolic Coordinate HUD -->
-      <div class="hud-section">
-        <div class="hud-row"><span>Ground Truth (X, Y):</span><strong id="hudGt">(520, 880) mm</strong></div>
-        <div class="hud-row"><span>TDOA Reconstructed:</span><strong id="hudRecon">(532, 894) mm</strong></div>
-        <div class="hud-row"><span>95% Confidence Ellipse:</span><strong id="hudEllipse">&plusmn; 22.0 mm</strong></div>
-        <div class="hud-row"><span>&Delta;t(2-1), &Delta;t(3-1), &Delta;t(4-1):</span><strong id="hudDt">[+12, -45, -28] &mu;s</strong></div>
-      </div>
+      <!-- Image Inspection Results Card -->
+      <div class="card" id="imageResultCard">
+        <div class="card-header">
+          <h2>Inspection Diagnosis & Defect Tracing</h2>
+          <span id="imgResultStatus" class="status-badge">Analyzed</span>
+        </div>
+        <div class="card-body">
+          <!-- Verdict box -->
+          <div id="imgVerdictBox" class="verdict-box defect">
+            <div class="verdict-header">
+              <span id="imgVerdictTitle" class="verdict-title">CRACK DETECTED</span>
+              <span id="imgConfidence" class="text-mono" style="font-size: 12px; font-weight: 700;">99.0% Confidence</span>
+            </div>
+            <div id="imgVerdictDesc" class="verdict-desc">Active silicon fracture traversing wafer finger lines. Potential hot-spot risk.</div>
+          </div>
 
-      <!-- Physics Mode Info -->
-      <div class="hud-section" style="margin-bottom: 0;">
-        <div class="hud-row"><span>Acoustic Mode:</span><span>S0 Fundamental Lamb</span></div>
-        <div class="hud-row"><span>Waveguide Velocity:</span><span>5300 m/s (c_plate)</span></div>
-        <div class="hud-row"><span>EVA Damping (&alpha;):</span><span>1.2 Np/m (viscoelastic)</span></div>
+          <!-- Metrics -->
+          <div class="metric-grid">
+            <div class="metric-card">
+              <div class="label">Classification</div>
+              <div class="value" id="imgMetricClass" style="font-size: 13px;">Transverse Micro-Crack</div>
+              <div class="unit">Defect Category</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">Total Crack Length</div>
+              <div class="value" id="imgMetricLength">252.4 mm</div>
+              <div class="unit">Cumulative span</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">Severity Level</div>
+              <div class="value" id="imgMetricSeverity">Severe</div>
+              <div class="unit">Structural Risk</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">Power Output Loss</div>
+              <div class="value" id="imgMetricLoss">-18.2%</div>
+              <div class="unit">Estimated drop</div>
+            </div>
+          </div>
+
+          <!-- Side-by-side images -->
+          <div class="image-preview-grid">
+            <div class="image-view-card">
+              <div class="image-view-header">Source Imagery (Raw Solar Cell)</div>
+              <div class="image-view-body">
+                <img id="rawCellImage" src="" alt="Source Solar Cell">
+              </div>
+            </div>
+            <div class="image-view-card">
+              <div class="image-view-header">Defect Segmentation & Crack Paths (Annotated)</div>
+              <div class="image-view-body">
+                <img id="annotatedCellImage" src="" alt="Annotated Crack Inspection">
+              </div>
+            </div>
+          </div>
+
+          <!-- Recommendation box -->
+          <div style="margin-top: 16px; padding: 12px 14px; background: #f8fafc; border: 1px solid var(--border); border-radius: 4px;">
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">
+              Maintenance Recommendation
+            </div>
+            <div id="imgRecommendationText" style="font-size: 13px; color: var(--text);">
+              High risk of localized hot-spots and bypass diode overload. Immediate cell replacement advised.
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
 
-  </div>
-
-  <!-- Bottom Verification Bar -->
-  <div class="audit-bar">
-    <div>
-      <span>V&V PROVENANCE: </span>
-      <span class="badge-pill badge-green">87% Test Coverage (22/22 Pass)</span>
-      <span class="badge-pill badge-blue">Bit-Reproducible (SHA-256 Match)</span>
-      <span class="badge-pill badge-blue">20,000-Event Benchmark (Mods 1-5)</span>
+    <!-- TAB 3: INSPECTION LOG -->
+    <div id="tab-reports" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2>Inspection Audit Log</h2>
+            <div class="subtitle">History of physical acoustic simulations and optical image inspections</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="clearInspectionLog()">Clear History</button>
+        </div>
+        <div class="card-body">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Method</th>
+                  <th>Source / Cell</th>
+                  <th>Verdict</th>
+                  <th>Classification</th>
+                  <th>Confidence</th>
+                  <th>Severity / Error</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                <!-- Log rows dynamically appended -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
-    <div>
-      <span>CONFIG HASH: <code>5c169304</code> | CODE GIT SHA: <code>b92cbc5</code></span>
-    </div>
-  </div>
+  </main>
 
   <script>
-    // Module Dimensions
-    const MOD_WIDTH = 1040.0;
-    const MOD_LENGTH = 1760.0;
-    const ROWS = 20;
-    const COLS = 6;
-    const SENSORS = [
-      { name: "S1", x: 60.0, y: 60.0 },
-      { name: "S2", x: 60.0, y: 1640.0 },
-      { name: "S3", x: 980.0, y: 60.0 },
-      { name: "S4", x: 980.0, y: 1640.0 }
-    ];
+    // State variables
+    let currentX = 480.0;
+    let currentY = 720.0;
+    const moduleWidth = 1040.0;
+    const moduleLength = 1760.0;
+    const inspectionHistory = [];
 
-    let currentEvent = {
-      gt: { x: 520, y: 880 },
-      recon: { x: 535, y: 895 },
-      ripples: []
-    };
-
-    const modCanvas = document.getElementById('moduleCanvas');
-    const modCtx = modCanvas.getContext('2d');
-    const oscCanvas = document.getElementById('oscCanvas');
-    const oscCtx = oscCanvas.getContext('2d');
-
-    // Click on canvas to inject event
-    modCanvas.addEventListener('pointerdown', (e) => {
-      const rect = modCanvas.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const clickY = e.clientY - rect.top;
-      
-      const realX = (clickX / rect.width) * MOD_WIDTH;
-      const realY = ((rect.height - clickY) / rect.height) * MOD_LENGTH; // Flip Y (0 at bottom)
-      
-      triggerSimulation(realX, realY, 'crack_initiation');
-    });
-
-    async function triggerSimulation(x, y, sourceType = 'crack_initiation', energy = 1.5) {
-      try {
-        const res = await fetch('/api/simulate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            x_mm: x,
-            y_mm: y,
-            source_type: sourceType,
-            temperature_c: 25.0,
-            energy: energy
-          })
-        });
-        const data = await res.json();
-        updateDashboard(data);
-      } catch (err) {
-        console.error("Simulation request failed:", err);
+    // Initialize 6x20 Solar Grid
+    function initSolarGrid() {
+      const grid = document.getElementById("solarGrid");
+      grid.innerHTML = "";
+      for (let r = 0; r < 20; r++) {
+        for (let c = 0; c < 6; c++) {
+          const cell = document.createElement("div");
+          cell.className = "solar-cell";
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          grid.appendChild(cell);
+        }
       }
     }
 
-    function updateDashboard(data) {
+    // Switch active tab
+    function switchTab(tabId) {
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.tab === tabId);
+      });
+      document.querySelectorAll(".tab-content").forEach(content => {
+        content.classList.toggle("active", content.id === tabId);
+      });
+      if (tabId === "tab-optical" && !document.getElementById("annotatedCellImage").src) {
+        loadPresetImage("microcrack");
+      }
+    }
+
+    // Handle click on PV frame to target simulation
+    function handlePanelClick(event) {
+      const frame = document.getElementById("pvFrame");
+      const rect = frame.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const clickY = event.clientY - rect.top;
+
+      const normX = Math.max(0, Math.min(1, clickX / rect.width));
+      const normY = Math.max(0, Math.min(1, clickY / rect.height));
+
+      currentX = +(normX * moduleWidth).toFixed(1);
+      currentY = +(normY * moduleLength).toFixed(1);
+
+      updateTargetDisplay(clickX, clickY);
+      runSimulation();
+    }
+
+    function updateTargetDisplay(pxX, pxY) {
+      const frame = document.getElementById("pvFrame");
+      const rect = frame.getBoundingClientRect();
+      if (!pxX) {
+        pxX = (currentX / moduleWidth) * rect.width;
+        pxY = (currentY / moduleLength) * rect.height;
+      }
+
+      const col = Math.min(5, Math.floor((currentX / moduleWidth) * 6));
+      const row = Math.min(19, Math.floor((currentY / moduleLength) * 20));
+
+      document.getElementById("dispTargetCoords").textContent = `X: ${currentX} mm, Y: ${currentY} mm`;
+      document.getElementById("dispTargetCell").textContent = `Cell (R${row + 1}, C${col + 1})`;
+
+      // Highlight cell in grid
+      document.querySelectorAll(".solar-cell").forEach(cell => cell.classList.remove("cell-selected"));
+      const cellElem = document.querySelector(`.solar-cell[data-row='${row}'][data-col='${col}']`);
+      if (cellElem) cellElem.classList.add("cell-selected");
+
+      // Place impact marker
+      const marker = document.getElementById("impactMarker");
+      marker.style.left = pxX + "px";
+      marker.style.top = pxY + "px";
+      marker.style.display = "block";
+
+      // Trigger wave animation
+      const ripple = document.getElementById("waveRipple");
+      ripple.style.left = pxX + "px";
+      ripple.style.top = pxY + "px";
+      ripple.style.display = "block";
+      ripple.classList.remove("wave-ripple");
+      void ripple.offsetWidth;
+      ripple.classList.add("wave-ripple");
+    }
+
+    // Run acoustic simulation API
+    async function runSimulation() {
+      const sourceType = document.getElementById("simSourceType").value;
+      const energy = parseFloat(document.getElementById("simEnergy").value) || 1.5;
+      const temp = parseFloat(document.getElementById("simTemp").value) || 25.0;
+
+      const payload = {
+        x_mm: currentX,
+        y_mm: currentY,
+        source_type: sourceType,
+        energy: energy,
+        temperature_c: temp
+      };
+
+      try {
+        const resp = await fetch("/api/simulate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        renderSimulationResults(data);
+      } catch (err) {
+        console.error("Simulation error:", err);
+      }
+    }
+
+    function renderSimulationResults(data) {
       const gt = data.ground_truth;
-      const rc = data.reconstruction;
+      const rec = data.reconstruction;
       const ml = data.ml_inference;
-      const ft = data.features;
+      const feat = data.features;
       const osc = data.oscilloscope;
 
-      currentEvent.gt = { x: gt.x_mm, y: gt.y_mm, isCrack: gt.is_crack };
-      currentEvent.recon = { x: rc.x_mm, y: rc.y_mm };
-      
-      // Start ripple animation
-      currentEvent.ripples = [{
-        x: gt.x_mm,
-        y: gt.y_mm,
-        radius: 0,
-        maxRadius: 1800,
-        alpha: 1.0
-      }];
+      // Verdict box
+      const isDefect = ml.is_crack_pred === 1;
+      const vBox = document.getElementById("verdictBox");
+      const vText = document.getElementById("verdictText");
+      const vConf = document.getElementById("verdictConfidence");
+      const vDesc = document.getElementById("verdictDetails");
 
-      // Update Verdict
-      const banner = document.getElementById('verdictBanner');
-      if (ml.is_crack_pred === 1) {
-        banner.className = 'verdict-banner verdict-crack';
-        document.getElementById('verdictText').innerText = '🚨 ' + ml.verdict;
-      } else if (ml.is_crack_pred === -1) {
-        banner.className = 'verdict-banner';
-        document.getElementById('verdictText').innerText = '⚠️ ' + ml.verdict;
-      } else {
-        banner.className = 'verdict-banner verdict-noise';
-        document.getElementById('verdictText').innerText = '✅ ' + ml.verdict;
-      }
-      document.getElementById('verdictSub').innerText = `Confidence: ${ml.confidence}% (Model: ${ml.model_name})`;
+      vBox.className = "verdict-box " + (isDefect ? "defect" : "normal");
+      vText.textContent = isDefect ? "CRACK DETECTED" : "NO CRACK DETECTED";
+      vConf.textContent = `${ml.confidence}% Confidence`;
+      vDesc.textContent = isDefect
+        ? `Acoustic emission signature confirms ${ml.predicted_source.replace(/_/g, ' ')} at ${gt.cell_id}. Micro-crack formation confirmed.`
+        : `Transient acoustic event registered (${gt.source_type.replace(/_/g, ' ')}). Normal module operation confirmed without structural fracture.`;
 
-      // Probability Bar
-      document.getElementById('probValue').innerText = `${ml.crack_probability}%`;
-      document.getElementById('probFill').style.width = `${ml.crack_probability}%`;
+      document.getElementById("verdictTimestamp").textContent = new Date().toLocaleTimeString();
 
       // Metrics
-      document.getElementById('locErrorVal').innerText = `${rc.error_mm} mm`;
-      document.getElementById('cellIdVal').innerText = rc.cell_id.replace('Cell ', '');
-      document.getElementById('cellMatchSub').innerText = rc.cell_matched ? '✅ Matched Exact Cell' : '⚠️ Adjacent Cell';
-      document.getElementById('freqVal').innerText = `${ft.centroid_khz} kHz`;
-      document.getElementById('riseVal').innerText = `${ft.rise_time_us} µs`;
+      document.getElementById("valCellId").textContent = rec.cell_id || gt.cell_id;
+      document.getElementById("valCellMatch").textContent = rec.cell_matched ? "Cell Match Confirmed" : "Approx. Localization";
+      document.getElementById("valEstCoords").textContent = rec.x_mm ? `${rec.x_mm}, ${rec.y_mm}` : "N/A";
+      document.getElementById("valPosError").textContent = rec.error_mm !== null ? `${rec.error_mm} mm` : "N/A";
+      document.getElementById("valPeakMv").textContent = `${feat.peak_amp_mv} mV`;
 
-      // HUD Table
-      document.getElementById('hudGt').innerText = `(${gt.x_mm}, ${gt.y_mm}) mm`;
-      document.getElementById('hudRecon').innerText = `(${rc.x_mm}, ${rc.y_mm}) mm`;
-      document.getElementById('hudEllipse').innerText = `± ${rc.uncertainty_semi_major_mm} mm`;
-      document.getElementById('hudDt').innerText = `[${rc.time_differences_us.slice(1).join(', ')}] µs`;
+      // Update damaged cell styling in grid
+      document.querySelectorAll(".solar-cell").forEach(c => c.classList.remove("cell-damaged"));
+      if (isDefect && gt.cell_row >= 0 && gt.cell_col >= 0) {
+        const damagedCell = document.querySelector(`.solar-cell[data-row='${gt.cell_row}'][data-col='${gt.cell_col}']`);
+        if (damagedCell) damagedCell.classList.add("cell-damaged");
+      }
 
-      // Channel details
-      const peaks = [
-        Math.max(...osc.waveforms.ch1.map(Math.abs)),
-        Math.max(...osc.waveforms.ch2.map(Math.abs)),
-        Math.max(...osc.waveforms.ch3.map(Math.abs)),
-        Math.max(...osc.waveforms.ch4.map(Math.abs))
-      ];
-      document.getElementById('ch1Peak').innerText = peaks[0].toFixed(0);
-      document.getElementById('ch2Peak').innerText = peaks[1].toFixed(0);
-      document.getElementById('ch3Peak').innerText = peaks[2].toFixed(0);
-      document.getElementById('ch4Peak').innerText = peaks[3].toFixed(0);
+      // Draw oscilloscope
+      drawOscilloscope(osc);
 
-      document.getElementById('ch1Arrival').innerText = (osc.onset_samples[0] * 1.0).toFixed(0);
-      document.getElementById('ch2Arrival').innerText = (osc.onset_samples[1] * 1.0).toFixed(0);
-      document.getElementById('ch3Arrival').innerText = (osc.onset_samples[2] * 1.0).toFixed(0);
-      document.getElementById('ch4Arrival').innerText = (osc.onset_samples[3] * 1.0).toFixed(0);
-
-      // Render Oscilloscope
-      renderOscilloscope(osc);
+      // Log to history
+      logInspection({
+        method: "Acoustic Simulation",
+        source: gt.cell_id + ` (${gt.x_mm}, ${gt.y_mm})`,
+        verdict: isDefect ? "CRACK DETECTED" : "NORMAL",
+        classification: ml.predicted_source || gt.source_type,
+        confidence: `${ml.confidence}%`,
+        metric: isDefect ? `Loc Error: ${rec.error_mm} mm` : "Pass"
+      });
     }
 
-    // Oscilloscope renderer
-    function renderOscilloscope(osc) {
-      const w = oscCanvas.width;
-      const h = oscCanvas.height;
-      oscCtx.clearRect(0, 0, w, h);
+    function setPresetSimulation(type) {
+      if (type === "center_crack") {
+        currentX = 480.0;
+        currentY = 720.0;
+        document.getElementById("simSourceType").value = "crack_initiation";
+      } else if (type === "hail_impact") {
+        currentX = 260.0;
+        currentY = 440.0;
+        document.getElementById("simSourceType").value = "noise_hail";
+      }
+      updateTargetDisplay();
+      runSimulation();
+    }
 
-      // Grid background
-      oscCtx.strokeStyle = '#1e293b';
-      oscCtx.lineWidth = 1;
+    // Draw Oscilloscope Waves
+    function drawOscilloscope(osc) {
+      const canvas = document.getElementById("scopeCanvas");
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width;
+      const h = canvas.height;
+
+      ctx.fillStyle = "#020617";
+      ctx.fillRect(0, 0, w, h);
+
+      // Grid lines
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1;
       for (let x = 0; x < w; x += 50) {
-        oscCtx.beginPath();
-        oscCtx.moveTo(x, 0);
-        oscCtx.lineTo(x, h);
-        oscCtx.stroke();
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
       }
-      for (let y = 0; y < h; y += 40) {
-        oscCtx.beginPath();
-        oscCtx.moveTo(0, y);
-        oscCtx.lineTo(w, y);
-        oscCtx.stroke();
+      for (let y = 0; y < h; y += 30) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
       }
 
-      // Pre-trigger window indicator
-      const preTriggerX = (osc.pre_trigger_samples / 2560) * w;
-      oscCtx.fillStyle = 'rgba(56, 189, 248, 0.05)';
-      oscCtx.fillRect(0, 0, preTriggerX, h);
-      oscCtx.strokeStyle = 'rgba(56, 189, 248, 0.3)';
-      oscCtx.setLineDash([4, 4]);
-      oscCtx.beginPath();
-      oscCtx.moveTo(preTriggerX, 0);
-      oscCtx.lineTo(preTriggerX, h);
-      oscCtx.stroke();
-      oscCtx.setLineDash([]);
+      const colors = ["#38bdf8", "#4ade80", "#facc15", "#f43f5e"];
+      const waves = [osc.waveforms.ch1, osc.waveforms.ch2, osc.waveforms.ch3, osc.waveforms.ch4];
 
-      const colors = ['#38bdf8', '#f43f5e', '#10b981', '#fbbf24'];
-      const chKeys = ['ch1', 'ch2', 'ch3', 'ch4'];
+      waves.forEach((wave, idx) => {
+        if (!wave || !wave.length) return;
+        ctx.strokeStyle = colors[idx];
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        const stepX = w / wave.length;
+        const baselineY = (h / 5) * (idx + 1);
 
-      chKeys.forEach((key, chIdx) => {
-        const trace = osc.waveforms[key];
-        const centerY = (chIdx + 0.5) * (h / 4);
-        const scaleY = (h / 4) * 0.4 / 1500; // 1500 mV full scale
+        for (let i = 0; i < wave.length; i++) {
+          const val = wave[i];
+          const y = baselineY - (val * 0.4);
+          if (i === 0) ctx.moveTo(0, y);
+          else ctx.lineTo(i * stepX, y);
+        }
+        ctx.stroke();
 
-        // Channel zero baseline
-        oscCtx.strokeStyle = 'rgba(255,255,255,0.08)';
-        oscCtx.beginPath();
-        oscCtx.moveTo(0, centerY);
-        oscCtx.lineTo(w, centerY);
-        oscCtx.stroke();
+        // Channel label
+        ctx.fillStyle = colors[idx];
+        ctx.font = "9px monospace";
+        ctx.fillText(`CH${idx + 1}`, 6, baselineY - 10);
+      });
+    }
 
-        // Waveform trace
-        oscCtx.strokeStyle = colors[chIdx];
-        oscCtx.lineWidth = 1.6;
-        oscCtx.beginPath();
-        trace.forEach((val, ptIdx) => {
-          const ptX = (ptIdx / (trace.length - 1)) * w;
-          const ptY = centerY - val * scaleY;
-          if (ptIdx === 0) oscCtx.moveTo(ptX, ptY);
-          else oscCtx.lineTo(ptX, ptY);
+    // Optical Image Inspection Functions
+    async function loadPresetImage(presetName) {
+      document.querySelectorAll(".preset-btn").forEach(b => b.classList.remove("active"));
+      const btn = document.getElementById("btnPreset" + presetName.charAt(0).toUpperCase() + presetName.slice(1).replace("_", ""));
+      if (btn) btn.classList.add("active");
+
+      try {
+        const resp = await fetch(`/api/preset-image/${presetName}`);
+        const data = await resp.json();
+        renderImageResults(data);
+      } catch (err) {
+        console.error("Preset load error:", err);
+      }
+    }
+
+    async function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const resp = await fetch("/api/upload-image", {
+          method: "POST",
+          body: formData
         });
-        oscCtx.stroke();
-
-        // Onset marker line
-        const onsetIdx = osc.onset_samples[chIdx] / 10;
-        const onsetX = (onsetIdx / (trace.length - 1)) * w;
-        oscCtx.strokeStyle = colors[chIdx];
-        oscCtx.setLineDash([3, 3]);
-        oscCtx.beginPath();
-        oscCtx.moveTo(onsetX, centerY - 30);
-        oscCtx.lineTo(onsetX, centerY + 30);
-        oscCtx.stroke();
-        oscCtx.setLineDash([]);
-      });
-    }
-
-    // Solar Module Canvas Renderer & Animation Loop
-    function renderModule() {
-      const w = modCanvas.width;
-      const h = modCanvas.height;
-      modCtx.clearRect(0, 0, w, h);
-
-      const scaleX = w / MOD_WIDTH;
-      const scaleY = h / MOD_LENGTH;
-
-      // Draw 120 Solar Cells (20 rows x 6 cols)
-      const cellW = (MOD_WIDTH / COLS) * scaleX;
-      const cellH = (MOD_LENGTH / ROWS) * scaleY;
-
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          const x = c * cellW;
-          const y = r * cellH;
-
-          // Check if this cell is the active hit cell
-          const hitRow = Math.floor((1.0 - currentEvent.gt.y / MOD_LENGTH) * ROWS);
-          const hitCol = Math.floor((currentEvent.gt.x / MOD_WIDTH) * COLS);
-
-          if (r === hitRow && c === hitCol) {
-            modCtx.fillStyle = 'rgba(239, 68, 68, 0.4)';
-            modCtx.strokeStyle = '#ef4444';
-            modCtx.lineWidth = 2;
-          } else {
-            modCtx.fillStyle = '#0f172a';
-            modCtx.strokeStyle = '#1e293b';
-            modCtx.lineWidth = 1;
-          }
-
-          modCtx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
-          modCtx.strokeRect(x + 1, y + 1, cellW - 2, cellH - 2);
-
-          // Busbar metallic lines
-          modCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-          modCtx.beginPath();
-          modCtx.moveTo(x + cellW * 0.33, y);
-          modCtx.lineTo(x + cellW * 0.33, y + cellH);
-          modCtx.moveTo(x + cellW * 0.66, y);
-          modCtx.lineTo(x + cellW * 0.66, y + cellH);
-          modCtx.stroke();
-        }
-      }
-
-      // Wavefront ripple animation
-      currentEvent.ripples.forEach(rip => {
-        rip.radius += 18; // wave velocity
-        rip.alpha = Math.max(0, 1.0 - (rip.radius / rip.maxRadius));
-
-        if (rip.alpha > 0) {
-          const ripCanvasX = rip.x * scaleX;
-          const ripCanvasY = h - (rip.y * scaleY);
-          const rCanvas = rip.radius * scaleX;
-
-          modCtx.strokeStyle = `rgba(56, 189, 248, ${rip.alpha * 0.8})`;
-          modCtx.lineWidth = 2;
-          modCtx.beginPath();
-          modCtx.arc(ripCanvasX, ripCanvasY, rCanvas, 0, 2 * Math.PI);
-          modCtx.stroke();
-        }
-      });
-
-      // Draw PZT Sensors
-      SENSORS.forEach(s => {
-        const sx = s.x * scaleX;
-        const sy = h - (s.y * scaleY);
-
-        modCtx.fillStyle = '#38bdf8';
-        modCtx.shadowColor = '#38bdf8';
-        modCtx.shadowBlur = 10;
-        modCtx.beginPath();
-        modCtx.arc(sx, sy, 7, 0, 2 * Math.PI);
-        modCtx.fill();
-        modCtx.shadowBlur = 0;
-
-        modCtx.fillStyle = 'white';
-        modCtx.font = 'bold 9px monospace';
-        modCtx.fillText(s.name, sx - 6, sy - 9);
-      });
-
-      // Draw Ground Truth Epicenter
-      const gtX = currentEvent.gt.x * scaleX;
-      const gtY = h - (currentEvent.gt.y * scaleY);
-
-      modCtx.fillStyle = currentEvent.gt.isCrack === 0 ? '#10b981' : '#ef4444';
-      modCtx.shadowColor = modCtx.fillStyle;
-      modCtx.shadowBlur = 14;
-      modCtx.beginPath();
-      modCtx.arc(gtX, gtY, 6, 0, 2 * Math.PI);
-      modCtx.fill();
-      modCtx.shadowBlur = 0;
-
-      // Draw TDOA Reconstruction Target Reticle
-      const rcX = currentEvent.recon.x * scaleX;
-      const rcY = h - (currentEvent.recon.y * scaleY);
-
-      modCtx.strokeStyle = '#38bdf8';
-      modCtx.lineWidth = 1.5;
-      modCtx.beginPath();
-      modCtx.arc(rcX, rcY, 10, 0, 2 * Math.PI);
-      modCtx.moveTo(rcX - 14, rcY);
-      modCtx.lineTo(rcX + 14, rcY);
-      modCtx.moveTo(rcX, rcY - 14);
-      modCtx.lineTo(rcX, rcY + 14);
-      modCtx.stroke();
-
-      // Error line connecting true to reconstruction
-      modCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-      modCtx.setLineDash([3, 3]);
-      modCtx.beginPath();
-      modCtx.moveTo(gtX, gtY);
-      modCtx.lineTo(rcX, rcY);
-      modCtx.stroke();
-      modCtx.setLineDash([]);
-
-      requestAnimationFrame(renderModule);
-    }
-
-    // Presets
-    function triggerPreset(type) {
-      if (type === 'crack_center') {
-        triggerSimulation(520.0, 880.0, 'crack_initiation', 2.0);
-      } else if (type === 'crack_busbar') {
-        triggerSimulation(346.0, 1320.0, 'crack_growth', 1.8);
-      } else if (type === 'noise_rain') {
-        triggerSimulation(700.0, 450.0, 'noise_rain', 0.5);
-      } else if (type === 'noise_inverter') {
-        triggerSimulation(200.0, 200.0, 'noise_inverter', 0.8);
+        const data = await resp.json();
+        renderImageResults(data);
+      } catch (err) {
+        console.error("File upload inspection error:", err);
       }
     }
 
-    // Auto-Tour for Judge
-    let tourIndex = 0;
-    const tourScenarios = [
-      { name: "crack_center", desc: "Scenario 1/4: Thermal fatigue micro-crack in center silicon cell" },
-      { name: "crack_busbar", desc: "Scenario 2/4: Microcrack cleavage propagating along busbar metallization" },
-      { name: "noise_rain", desc: "Scenario 3/4: High-energy rain drop impact (rejected by ML classifier)" },
-      { name: "noise_inverter", desc: "Scenario 4/4: Solar inverter PWM switching transient noise (rejected)" }
-    ];
+    function renderImageResults(data) {
+      const isDefect = data.is_crack_detected;
+      const vBox = document.getElementById("imgVerdictBox");
+      const vTitle = document.getElementById("imgVerdictTitle");
+      const vConf = document.getElementById("imgConfidence");
+      const vDesc = document.getElementById("imgVerdictDesc");
 
-    function startAutoTour() {
-      tourIndex = 0;
-      runNextTourStep();
+      vBox.className = "verdict-box " + (isDefect ? "defect" : "normal");
+      vTitle.textContent = data.verdict;
+      vConf.textContent = `${data.confidence_pct}% Confidence`;
+      vDesc.textContent = data.recommendation;
+
+      document.getElementById("imgMetricClass").textContent = data.classification;
+      document.getElementById("imgMetricLength").textContent = `${data.crack_length_mm} mm`;
+      document.getElementById("imgMetricSeverity").textContent = data.severity;
+      document.getElementById("imgMetricLoss").textContent = `-${data.power_loss_est_pct}%`;
+
+      document.getElementById("rawCellImage").src = data.original_image_b64;
+      document.getElementById("annotatedCellImage").src = data.annotated_image_b64;
+      document.getElementById("imgRecommendationText").textContent = data.recommendation;
+
+      // Log inspection
+      logInspection({
+        method: "Optical / EL Scan",
+        source: "Solar Cell Image",
+        verdict: isDefect ? "CRACK DETECTED" : "PASS (INTACT)",
+        classification: data.classification,
+        confidence: `${data.confidence_pct}%`,
+        metric: isDefect ? `Length: ${data.crack_length_mm} mm` : "Defect-Free"
+      });
     }
 
-    function runNextTourStep() {
-      if (tourIndex >= tourScenarios.length) {
-        alert("✨ Judge Walkthrough Complete: Demonstrated crack initiation, busbar fracture, and ambient environmental noise rejection.");
-        return;
+    // Drag and drop setup
+    const dropzone = document.getElementById("dropzone");
+    ["dragenter", "dragover"].forEach(name => {
+      dropzone.addEventListener(name, (e) => { e.preventDefault(); dropzone.classList.add("dragover"); });
+    });
+    ["dragleave", "drop"].forEach(name => {
+      dropzone.addEventListener(name, (e) => { e.preventDefault(); dropzone.classList.remove("dragover"); });
+    });
+    dropzone.addEventListener("drop", (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files.length) {
+        document.getElementById("fileInput").files = files;
+        handleFileUpload({ target: { files: files } });
       }
-      const step = tourScenarios[tourIndex];
-      triggerPreset(step.name);
-      tourIndex++;
-      setTimeout(runNextTourStep, 3500);
+    });
+
+    // Logging & History Table
+    function logInspection(entry) {
+      entry.time = new Date().toLocaleTimeString();
+      inspectionHistory.unshift(entry);
+      renderHistoryTable();
     }
 
-    // Start on page load
-    window.addEventListener('load', () => {
-      triggerPreset('crack_center');
-      requestAnimationFrame(renderModule);
+    function renderHistoryTable() {
+      const tbody = document.getElementById("historyTableBody");
+      tbody.innerHTML = "";
+      inspectionHistory.forEach(item => {
+        const isDefect = item.verdict.includes("CRACK") || item.verdict.includes("DEFECT");
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td class="text-mono">${item.time}</td>
+          <td>${item.method}</td>
+          <td class="text-mono">${item.source}</td>
+          <td><span class="${isDefect ? 'badge-defect' : 'badge-pass'}">${item.verdict}</span></td>
+          <td>${item.classification}</td>
+          <td class="text-mono">${item.confidence}</td>
+          <td class="text-mono">${item.metric}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function clearInspectionLog() {
+      inspectionHistory.length = 0;
+      renderHistoryTable();
+    }
+
+    // Initial load
+    window.addEventListener("DOMContentLoaded", () => {
+      initSolarGrid();
+      updateTargetDisplay();
+      runSimulation();
     });
   </script>
 </body>
 </html>
-

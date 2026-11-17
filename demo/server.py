@@ -12,13 +12,15 @@ Integrity rules (docs/research/CODEBASE_EVALUATION.md §2.4):
   hard-coded numbers.
 """
 
+import base64
 import json
 import sys
 from pathlib import Path
 
+import cv2
 import numpy as np
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
@@ -26,6 +28,9 @@ from pydantic import BaseModel
 root = Path(__file__).resolve().parent.parent
 for pkg in ("schemas", "physics", "daqtwin", "dsp", "ml", "sdk"):
     sys.path.insert(0, str(root / "packages" / pkg / "src"))
+sys.path.insert(0, str(root))
+
+from demo.image_analyzer import analyze_solar_image, generate_preset_cell
 
 from acoustisolar_daqtwin.engine import DAQDigitalTwin  # noqa: E402
 from acoustisolar_dsp.features import AEFeatureExtractor  # noqa: E402
@@ -172,6 +177,32 @@ def run_simulation(req: SimulationRequest):
             "sensors": [{"name": f"S{i + 1}", "x_mm": p[0], "y_mm": p[1]} for i, p in enumerate(sensor_cfg.positions_mm)],
         },
     }
+
+
+class ImageAnalysisRequest(BaseModel):
+    image_base64: str
+
+
+@app.post("/api/analyze-image")
+def analyze_image_endpoint(req: ImageAnalysisRequest):
+    data = req.image_base64
+    if "," in data:
+        data = data.split(",", 1)[1]
+    raw_bytes = base64.b64decode(data)
+    return analyze_solar_image(raw_bytes)
+
+
+@app.post("/api/upload-image")
+async def upload_image_endpoint(file: UploadFile = File(...)):
+    contents = await file.read()
+    return analyze_solar_image(contents)
+
+
+@app.get("/api/preset-image/{preset_name}")
+def get_preset_image_endpoint(preset_name: str):
+    img = generate_preset_cell(preset_name)
+    _, buf = cv2.imencode(".png", img)
+    return analyze_solar_image(buf.tobytes())
 
 
 @app.get("/api/benchmark_summary")

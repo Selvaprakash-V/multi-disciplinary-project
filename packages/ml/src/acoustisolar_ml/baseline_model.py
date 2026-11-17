@@ -121,7 +121,15 @@ class AEFeatureClassifier:
     # ------------------------------------------------------------------ persistence
     def save(self, path) -> str:
         """Save with joblib and write a SHA-256 sidecar; returns the digest."""
+        import sys
         import joblib
+
+        if "_loss" not in sys.modules:
+            try:
+                import sklearn._loss._loss
+                sys.modules["_loss"] = sklearn._loss._loss
+            except ImportError:
+                pass
 
         path = Path(path)
         joblib.dump({"classes": self.classes, "model": self.model}, path)
@@ -136,7 +144,15 @@ class AEFeatureClassifier:
         joblib/pickle files can execute code when loaded; never load a model file whose
         provenance you have not verified.
         """
+        import sys
         import joblib
+
+        if "_loss" not in sys.modules:
+            try:
+                import sklearn._loss._loss
+                sys.modules["_loss"] = sklearn._loss._loss
+            except ImportError:
+                pass
 
         path = Path(path)
         digest = hashlib.sha256(path.read_bytes()).hexdigest()

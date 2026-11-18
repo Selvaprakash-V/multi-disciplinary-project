@@ -145,14 +145,18 @@ def _simulate(req: SimulationRequest, seed: int):
 
     onset_samples = [int(OnsetPicker.threshold_onset(volts[ch])) for ch in range(4)]
     v_s0 = float(sim.s0_velocity(temp))
-    loc = localizer.locate(volts, v_eff_m_s=v_s0, bounds_mm=(0.0, width, 0.0, length))
+    v_a0 = float(sim.a0_velocity(temp))
+    loc = localizer.locate(volts, v_eff_m_s=v_s0, v_a0_m_s=v_a0, min_snr_db=10.0, bounds_mm=(0.0, width, 0.0, length))
     x_est = float(np.clip(loc["x_mm"], 0.0, width)) if np.isfinite(loc["x_mm"]) else float("nan")
     y_est = float(np.clip(loc["y_mm"], 0.0, length)) if np.isfinite(loc["y_mm"]) else float("nan")
     located = np.isfinite(x_est)
     loc_err = float(np.hypot(x_est - x, y_est - y)) if located else float("nan")
     row_est, col_est, cell_label_est = get_cell_coordinates(x_est, y_est, width, length) if located else (-1, -1, "n/a")
     arr = np.array([a if a is not None else np.nan for a in loc["arrival_samples"]], dtype=float)
-    dt_us = (arr - arr[0]).round(2).tolist() if np.isfinite(arr[0]) else [None] * 4
+    dt_us = [
+        round(float(a - arr[0]), 2) if (np.isfinite(a) and np.isfinite(arr[0])) else None
+        for a in arr
+    ]
 
     features = feat_extractor.extract_channel_features(volts, (x_est, y_est) if located else None, (width, length), temp)
     ch1 = feat_extractor.extract_features(volts[0])

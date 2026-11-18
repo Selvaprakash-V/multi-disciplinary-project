@@ -1,1513 +1,1289 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AcoustiSolar — AE testbench</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  /* ---------------------------------------------------------------- tokens */
-  :root {
-    --bg: #f3f2ee;
-    --surface: #ffffff;
-    --surface-2: #f8f7f4;
-    --plot-bg: #ffffff;
-    --ink: #1c1e21;
-    --ink-2: #4b5059;
-    --ink-3: #80858d;
-    --rule: #e2e0da;
-    --rule-strong: #c8c5bc;
-    --grid: #eeece7;
-    --accent: #1f4e79;
-    --accent-soft: #e6edf4;
-    --alarm: #a8261d;
-    --alarm-soft: #f8e9e7;
-    --ok: #2d6a3a;
-    --ok-soft: #e8f1ea;
-    --warn: #8a5a00;
-    /* Okabe-Ito, readable on white and for colour-vision deficiency */
-    --ch1: #0072b2;
-    --ch2: #d55e00;
-    --ch3: #009e73;
-    --ch4: #a2508a;
-    --sans: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
-    --mono: "IBM Plex Mono", Consolas, "SFMono-Regular", Menlo, monospace;
-  }
-  [data-theme="dark"] {
-    --bg: #131518;
-    --surface: #1b1e22;
-    --surface-2: #202429;
-    --plot-bg: #16191c;
-    --ink: #e7e5e0;
-    --ink-2: #b4b2ad;
-    --ink-3: #85878b;
-    --rule: #2c3036;
-    --rule-strong: #3d424a;
-    --grid: #23272c;
-    --accent: #7fb0dd;
-    --accent-soft: #1f2d3b;
-    --alarm: #ef8a80;
-    --alarm-soft: #3a2220;
-    --ok: #86c596;
-    --ok-soft: #1e3024;
-    --warn: #e0b45c;
-    --ch1: #56b4e9;
-    --ch2: #e69f00;
-    --ch3: #33c08f;
-    --ch4: #d88fbe;
-  }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solar Panel Defect & Micro-Crack Detection System</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --bg-subtle: #f8fafc;
+      --bg-card: #ffffff;
+      --border: #e2e8f0;
+      --border-dark: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --text-dim: #94a3b8;
+      --primary: #0f172a;
+      --primary-hover: #1e293b;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --danger-border: #fecaca;
+      --success: #15803d;
+      --success-bg: #f0fdf4;
+      --success-border: #bbf7d0;
+      --warning: #b45309;
+      --warning-bg: #fffbeb;
+      --warning-border: #fef3c7;
+      --solar-blue: #1e3a8a;
+      --solar-cell-bg: #1e293b;
+      --solar-cell-hover: #2d3748;
+      --sensor-color: #0284c7;
+    }
 
-  * { box-sizing: border-box; }
-  html, body { margin: 0; }
-  body {
-    background: var(--bg);
-    color: var(--ink);
-    font: 14px/1.45 var(--sans);
-    -webkit-font-smoothing: antialiased;
-  }
-  .num, td.num, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-  button, input, select { font: inherit; color: inherit; }
-  a { color: var(--accent); }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg-subtle);
+      color: var(--text);
+      line-height: 1.5;
+      font-size: 14px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
 
-  /* ---------------------------------------------------------------- header */
-  .topbar {
-    display: flex; align-items: center; gap: 28px;
-    height: 52px; padding: 0 20px;
-    background: var(--surface); border-bottom: 1px solid var(--rule);
-  }
-  .brand { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
-  .brand strong { font-size: 16px; font-weight: 600; letter-spacing: .01em; }
-  .brand span { color: var(--ink-3); font-size: 13px; }
-  .tabs { display: flex; height: 100%; }
-  .tab {
-    border: 0; background: none; padding: 0 14px; cursor: pointer;
-    color: var(--ink-2); border-bottom: 2px solid transparent; margin-bottom: -1px;
-  }
-  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 500; }
-  .tab:hover { color: var(--ink); }
-  .topbar .spacer { flex: 1; }
-  .status { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 13px; white-space: nowrap; }
-  .status i { width: 8px; height: 8px; border-radius: 1px; background: var(--ink-3); display: inline-block; }
-  .status.ok i { background: var(--ok); }
-  .status.bad i { background: var(--alarm); }
-  .theme-toggle {
-    display: inline-flex; padding: 2px; gap: 2px;
-    background: var(--surface-2); border: 1px solid var(--rule-strong); border-radius: 4px;
-  }
-  .theme-toggle button {
-    display: inline-flex; align-items: center; gap: 5px;
-    height: 26px; padding: 0 10px; border: 0; border-radius: 3px; cursor: pointer;
-    background: none; color: var(--ink-3); font-size: 12.5px;
-  }
-  .theme-toggle button:hover { color: var(--ink); }
-  .theme-toggle button[aria-checked="true"] {
-    background: var(--surface); color: var(--ink); font-weight: 500;
-    box-shadow: 0 0 0 1px var(--rule-strong);
-  }
-  .theme-toggle svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
-  .theme-toggle button[data-theme-choice="dark"] svg { fill: currentColor; stroke: none; }
+    /* Header */
+    header {
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
 
-  /* ---------------------------------------------------------------- layout */
-  main { padding: 16px 20px 28px; }
-  .view[hidden] { display: none; }
-  .event-grid {
-    display: grid; gap: 16px;
-    grid-template-columns: 286px minmax(0, 1fr) 340px;
-    align-items: start;
-  }
-  .stack { display: grid; gap: 16px; }
-  .panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 3px; }
-  .panel > header {
-    display: flex; align-items: center; gap: 10px;
-    padding: 9px 14px; border-bottom: 1px solid var(--rule);
-  }
-  .panel > header h2 { margin: 0; font-size: 13px; font-weight: 600; white-space: nowrap; }
-  .panel > header .aside { margin-left: auto; color: var(--ink-3); font-size: 12px; }
-  .panel .body { padding: 12px 14px; }
-  .caption { margin: 0; padding: 8px 14px 11px; color: var(--ink-2); font-size: 12.5px; border-top: 1px solid var(--rule); }
-  .caption b { font-weight: 600; color: var(--ink); }
-  .figure-row { display: grid; grid-template-columns: 300px minmax(0, 1fr); }
-  .figure-row > div + div { border-left: 1px solid var(--rule); }
-  .lower-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--text);
+    }
+    .brand-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
 
-  /* ---------------------------------------------------------------- form */
-  .field { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; margin-bottom: 9px; }
-  .field label { color: var(--ink-2); font-size: 13px; }
-  .field .unit { color: var(--ink-3); font-size: 12px; margin-left: 4px; }
-  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  input[type="number"], select {
-    width: 100%; height: 30px; padding: 0 8px;
-    background: var(--surface-2); border: 1px solid var(--rule-strong); border-radius: 2px;
-  }
-  input[type="number"] { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-  input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .withval { display: grid; grid-template-columns: 1fr 52px; gap: 8px; align-items: center; }
-  .withval output { font-family: var(--mono); font-size: 12.5px; text-align: right; color: var(--ink-2); }
-  input[type="range"] { width: 100%; accent-color: var(--accent); }
-  .check { display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 13px; }
-  .row-actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
-  .btn {
-    height: 32px; padding: 0 14px; cursor: pointer;
-    background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 2px;
-  }
-  .btn:hover { border-color: var(--ink-3); }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
-  [data-theme="dark"] .btn.primary { color: #10151b; }
-  .btn.primary:hover { filter: brightness(1.08); }
-  .btn:disabled { opacity: .55; cursor: progress; }
-  .btn.small { height: 26px; padding: 0 9px; font-size: 12.5px; }
-  kbd {
-    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
-    border: 1px solid var(--rule-strong); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px;
-  }
+    .system-status {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 11px;
+      background: #f1f5f9;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .status-badge.online {
+      background: #f0fdf4;
+      color: #166534;
+      border-color: #bbf7d0;
+    }
 
-  /* ---------------------------------------------------------------- reference cases */
-  .cases { list-style: none; margin: 0; padding: 0; }
-  .cases li + li { border-top: 1px solid var(--rule); }
-  .case {
-    display: grid; grid-template-columns: 18px 1fr; gap: 2px 8px;
-    width: 100%; text-align: left; background: none; border: 0; padding: 9px 14px; cursor: pointer;
-  }
-  .case:hover { background: var(--surface-2); }
-  .case[aria-current="true"] { background: var(--accent-soft); }
-  .case .n { font-family: var(--mono); color: var(--ink-3); font-size: 12px; padding-top: 1px; }
-  .case .t { font-weight: 500; }
-  .case .d { grid-column: 2; color: var(--ink-2); font-size: 12.5px; }
-  .case .p { grid-column: 2; color: var(--ink-3); font-size: 11.5px; font-family: var(--mono); }
-  .case.limit .t::after { content: "known limitation"; margin-left: 8px; font-size: 11px; font-weight: 500; color: var(--warn); }
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      gap: 20px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 12px 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .tab-btn:hover {
+      color: var(--text);
+    }
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
 
-  /* ---------------------------------------------------------------- plots */
-  .plot-wrap { position: relative; }
-  canvas { display: block; }
-  #scope { cursor: crosshair; }
-  #map { cursor: crosshair; }
-  .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .seg { display: inline-flex; border: 1px solid var(--rule-strong); border-radius: 2px; overflow: hidden; }
-  .seg button { border: 0; background: var(--surface); padding: 3px 9px; font-size: 12.5px; cursor: pointer; color: var(--ink-2); }
-  .seg button + button { border-left: 1px solid var(--rule-strong); }
-  .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); font-weight: 500; }
-  .readout { padding: 6px 14px; font-family: var(--mono); font-size: 12px; color: var(--ink-2); min-height: 28px; border-top: 1px solid var(--rule); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .readout .c1 { color: var(--ch1); } .readout .c2 { color: var(--ch2); }
-  .readout .c3 { color: var(--ch3); } .readout .c4 { color: var(--ch4); }
-  .legend-inline { display: flex; gap: 14px; flex-wrap: wrap; color: var(--ink-2); font-size: 12px; }
-  .legend-inline span { display: inline-flex; align-items: center; gap: 5px; }
-  .sw { display: inline-block; width: 14px; height: 0; border-top: 2px solid; }
-  .sw.dash { border-top-style: dashed; }
-  .sw.dot { border-top-style: dotted; }
+    /* Main Container */
+    main {
+      flex: 1;
+      padding: 24px 28px;
+      max-width: 1440px;
+      margin: 0 auto;
+      width: 100%;
+    }
 
-  /* ---------------------------------------------------------------- tables */
-  table { border-collapse: collapse; width: 100%; }
-  th, td { padding: 5px 8px; text-align: left; vertical-align: baseline; }
-  th { font-weight: 500; color: var(--ink-2); font-size: 12px; border-bottom: 1px solid var(--rule-strong); }
-  td { border-bottom: 1px solid var(--rule); }
-  tr:last-child td { border-bottom: 0; }
-  td.num, th.num { text-align: right; }
-  .kv td:first-child { color: var(--ink-2); width: 44%; }
-  .kv td { padding: 5px 0; }
-  .kv td.num { text-align: right; white-space: nowrap; }
-  .muted { color: var(--ink-3); }
-  .tag { font-size: 11px; font-weight: 500; padding: 0 4px; border-radius: 2px; border: 1px solid currentColor; }
-  .tag.true { color: var(--accent); }
-  .ok-t { color: var(--ok); } .bad-t { color: var(--alarm); } .warn-t { color: var(--warn); }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
 
-  /* ---------------------------------------------------------------- decision */
-  .decision { padding: 12px 14px; border-left: 3px solid var(--ink-3); background: var(--surface-2); }
-  .decision.alarm { border-left-color: var(--alarm); background: var(--alarm-soft); }
-  .decision.clear { border-left-color: var(--ok); background: var(--ok-soft); }
-  .decision .verdict { font-size: 18px; font-weight: 600; }
-  .decision.alarm .verdict { color: var(--alarm); }
-  .decision.clear .verdict { color: var(--ok); }
-  .decision .sub { color: var(--ink-2); font-size: 12.5px; margin-top: 2px; }
-  .pbar { position: relative; height: 8px; background: var(--rule); margin: 10px 0 4px; border-radius: 1px; }
-  .pbar .fill { position: absolute; inset: 0 auto 0 0; background: var(--ink-2); border-radius: 1px; }
-  .pbar .thr { position: absolute; top: -4px; bottom: -4px; width: 0; border-left: 1.5px solid var(--ink); }
-  .pscale { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
-  .post td { padding: 3px 0; border: 0; font-size: 13px; }
-  .post td.name { width: 46%; padding-right: 8px; white-space: nowrap; }
-  .post td.bar { padding-right: 8px; }
-  .post .b { height: 7px; background: var(--rule-strong); min-width: 1px; border-radius: 1px; }
-  .post tr.pred td.name { font-weight: 600; }
-  .post tr.pred .b { background: var(--accent); }
-  .post td.num { width: 52px; font-size: 12.5px; }
-  .nf { color: var(--alarm); font-size: 11px; margin-left: 3px; }
+    /* Two-column layout */
+    .grid-2col {
+      display: grid;
+      grid-template-columns: 480px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
 
-  /* ---------------------------------------------------------------- run log */
-  .log { max-height: 236px; overflow: auto; }
-  .log table { font-size: 12.5px; }
-  .log tbody tr { cursor: pointer; }
-  .log tbody tr:hover td { background: var(--surface-2); }
-  .log tbody tr.sel td { background: var(--accent-soft); }
-  .log th { position: sticky; top: 0; background: var(--surface); }
-  .empty { color: var(--ink-3); font-size: 12.5px; padding: 10px 14px; }
+    @media (max-width: 1080px) {
+      .grid-2col {
+        grid-template-columns: 1fr;
+      }
+    }
 
-  /* ---------------------------------------------------------------- validation view */
-  .val-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; max-width: 1500px; }
-  .val-intro { max-width: 900px; color: var(--ink-2); margin: 0 0 16px; }
-  .val-intro b { color: var(--ink); }
-  .val-table td, .val-table th { padding: 6px 12px; }
-  .val-table td:first-child, .val-table th:first-child { padding-left: 14px; }
-  .val-table td:last-child, .val-table th:last-child { padding-right: 14px; }
-  .note { color: var(--ink-3); font-size: 12px; padding: 8px 14px 12px; margin: 0; border-top: 1px solid var(--rule); }
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-header h2 {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+    .card-header .subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 400;
+      text-transform: none;
+    }
+    .card-body {
+      padding: 16px;
+    }
 
-  /* ---------------------------------------------------------------- responsive */
-  @media (max-width: 1360px) {
-    .event-grid { grid-template-columns: 270px minmax(0, 1fr); }
-    .results { grid-column: 1 / -1; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-  }
-  @media (max-width: 980px) {
-    .event-grid, .val-grid, .lower-row { grid-template-columns: minmax(0, 1fr); }
-    .figure-row { grid-template-columns: minmax(0, 1fr); }
-    .figure-row > div + div { border-left: 0; border-top: 1px solid var(--rule); }
-    .brand span, .status span.long { display: none; }
-  }
-</style>
+    /* Solar Panel Visualization */
+    .panel-container {
+      position: relative;
+      background: #f1f5f9;
+      border: 2px solid #94a3b8;
+      border-radius: 4px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      user-select: none;
+    }
+    .panel-frame {
+      width: 100%;
+      height: 640px;
+      background: #0f172a;
+      border: 6px solid #475569;
+      border-radius: 2px;
+      position: relative;
+      cursor: crosshair;
+      overflow: hidden;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+    }
+    .solar-grid {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      grid-template-rows: repeat(20, 1fr);
+      gap: 2px;
+      background: #334155;
+      padding: 3px;
+    }
+    .solar-cell {
+      background: #1e293b;
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: background 0.15s ease;
+    }
+    .solar-cell:hover {
+      background: #334155;
+    }
+    .solar-cell.cell-damaged {
+      background: #991b1b !important;
+      border-color: #ef4444 !important;
+    }
+    .solar-cell.cell-selected {
+      outline: 2px solid #ffffff;
+      outline-offset: -2px;
+    }
+
+    /* Busbars inside cells */
+    .solar-cell::before, .solar-cell::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: rgba(255, 255, 255, 0.25);
+    }
+    .solar-cell::before { left: 33%; }
+    .solar-cell::after { left: 66%; }
+
+    /* Sensor Markers */
+    .sensor-marker {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      background: #ffffff;
+      border: 2px solid #0f172a;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 800;
+      color: #0f172a;
+      font-family: monospace;
+      z-index: 10;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    /* Impact and Localization Marks */
+    .impact-mark {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #ef4444;
+      border: 2px solid #ffffff;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 15;
+    }
+    .loc-mark {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border: 2px dashed #38bdf8;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 14;
+    }
+    .wave-ripple {
+      position: absolute;
+      border: 2px solid rgba(239, 68, 68, 0.7);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 12;
+      animation: ripple 0.8s ease-out forwards;
+    }
+    @keyframes ripple {
+      0% { width: 4px; height: 4px; opacity: 1; }
+      100% { width: 340px; height: 340px; opacity: 0; }
+    }
+
+    /* Controls & Forms */
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .form-select, .form-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border-dark);
+      border-radius: 4px;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .form-select:focus, .form-input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+      text-decoration: none;
+      border: 1px solid transparent;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary);
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+    .btn-secondary {
+      background: #ffffff;
+      color: var(--text);
+      border-color: var(--border-dark);
+    }
+    .btn-secondary:hover {
+      background: #f1f5f9;
+    }
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 11px;
+    }
+    .btn-block {
+      width: 100%;
+    }
+
+    /* Results Banner */
+    .verdict-box {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background: #ffffff;
+    }
+    .verdict-box.defect {
+      border-left: 4px solid var(--danger);
+      background: var(--danger-bg);
+    }
+    .verdict-box.normal {
+      border-left: 4px solid var(--success);
+      background: var(--success-bg);
+    }
+    .verdict-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .verdict-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+    }
+    .verdict-box.defect .verdict-title { color: #991b1b; }
+    .verdict-box.normal .verdict-title { color: #166534; }
+
+    .verdict-desc {
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    /* Metric Grid */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .metric-card {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px;
+      background: var(--bg);
+    }
+    .metric-card .label {
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+    .metric-card .value {
+      font-size: 16px;
+      font-weight: 700;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      color: var(--text);
+    }
+    .metric-card .unit {
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--text-muted);
+    }
+
+    /* Oscilloscope / Waveform Viewer */
+    .scope-box {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 12px;
+      color: #f8fafc;
+      font-family: monospace;
+    }
+    .scope-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+    canvas {
+      width: 100%;
+      height: 180px;
+      display: block;
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 2px;
+    }
+
+    /* Image Inspection Section */
+    .dropzone {
+      border: 2px dashed var(--border-dark);
+      border-radius: 6px;
+      padding: 32px 20px;
+      text-align: center;
+      background: var(--bg);
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--primary);
+      background: #f1f5f9;
+    }
+    .dropzone input {
+      display: none;
+    }
+    .dropzone-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .dropzone-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .preset-selector {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 14px 0 20px 0;
+    }
+    .preset-btn {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 8px;
+      background: var(--bg);
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .preset-btn:hover {
+      border-color: var(--primary);
+      background: #f8fafc;
+    }
+    .preset-btn.active {
+      border-color: var(--primary);
+      background: #0f172a;
+      color: #ffffff;
+    }
+    .preset-btn.active .preset-title, .preset-btn.active .preset-tag {
+      color: #ffffff;
+    }
+    .preset-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+    .preset-tag {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .image-preview-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .image-view-card {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    .image-view-header {
+      padding: 6px 10px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .image-view-body {
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f1f5f9;
+      min-height: 320px;
+    }
+    .image-view-body img {
+      max-width: 100%;
+      max-height: 380px;
+      border-radius: 2px;
+      border: 1px solid var(--border);
+      background: #ffffff;
+    }
+
+    /* History Table */
+    .table-container {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-size: 10px;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+    tr:hover td {
+      background: #f8fafc;
+    }
+    .badge-defect {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 700;
+      font-size: 10px;
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+    .badge-pass {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-weight: 700;
+      font-size: 10px;
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+
+    /* Helper styles */
+    .text-mono {
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+    .mt-12 { margin-top: 12px; }
+    .mt-16 { margin-top: 16px; }
+    .mb-12 { margin-bottom: 12px; }
+  </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div class="brand"><strong>AcoustiSolar</strong><span>AE monitoring of PV modules · Tier-0 simulation testbench</span></div>
-  <nav class="tabs" role="tablist">
-    <button class="tab" role="tab" aria-selected="true" data-view="event">Event</button>
-    <button class="tab" role="tab" aria-selected="false" data-view="validation">Validation record</button>
-  </nav>
-  <div class="spacer"></div>
-  <div class="status" id="status"><i></i><span>Connecting…</span></div>
-  <div class="theme-toggle" id="themeToggle" role="radiogroup" aria-label="Colour theme">
-    <button role="radio" data-theme-choice="light" aria-checked="true" title="Light theme">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.4 1.4M11.6 11.6 13 13M3 13l1.4-1.4M11.6 4.4 13 3"/></svg>Light
-    </button>
-    <button role="radio" data-theme-choice="dark" aria-checked="false" title="Dark theme">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 10.2A5.8 5.8 0 0 1 5.8 2.5a5.8 5.8 0 1 0 7.7 7.7z"/></svg>Dark
-    </button>
-  </div>
-</div>
-
-<main>
-<!-- ================================================================== EVENT VIEW -->
-<section class="view" id="view-event">
-  <div class="event-grid">
-
-    <!-- left: source definition, reference cases, run log -->
-    <div class="stack">
-      <section class="panel">
-        <header><h2>Source</h2><span class="aside">click the module to place</span></header>
-        <div class="body">
-          <div class="field">
-            <label for="srcType">Type</label>
-            <select id="srcType">
-              <optgroup label="Crack activity">
-                <option value="crack_initiation">Crack initiation</option>
-                <option value="crack_growth">Crack growth</option>
-                <option value="crack_friction">Crack-face friction</option>
-              </optgroup>
-              <optgroup label="Environmental / electrical">
-                <option value="noise_rain">Rain impact</option>
-                <option value="noise_hail">Hail impact</option>
-                <option value="noise_wind">Wind rattle (clamp)</option>
-                <option value="noise_thermal">Thermal tick (frame)</option>
-                <option value="noise_inverter">Inverter EMI burst</option>
-              </optgroup>
-            </select>
-          </div>
-          <div class="field">
-            <label>Position<span class="unit">mm</span></label>
-            <div class="pair">
-              <input type="number" id="srcX" min="0" max="1040" step="1" value="560" aria-label="x position in mm" title="x (0–1040 mm)">
-              <input type="number" id="srcY" min="0" max="1760" step="1" value="930" aria-label="y position in mm" title="y (0–1760 mm)">
-            </div>
-          </div>
-          <div class="field">
-            <label for="srcE">Energy<span class="unit">a.u.</span></label>
-            <div class="withval"><input type="range" id="srcE" min="0.1" max="10" step="0.1" value="2"><output id="srcEv">2.0</output></div>
-          </div>
-          <div class="field">
-            <label for="srcT">Temperature<span class="unit">°C</span></label>
-            <div class="withval"><input type="range" id="srcT" min="-20" max="80" step="1" value="25"><output id="srcTv">25</output></div>
-          </div>
-          <div class="field">
-            <label for="srcSeed">Seed</label>
-            <div class="pair" style="grid-template-columns: 1fr auto;">
-              <input type="number" id="srcSeed" min="0" step="1" value="101">
-              <label class="check" title="Keep the seed fixed so repeated runs are identical"><input type="checkbox" id="seedFixed" checked> fixed</label>
-            </div>
-          </div>
-          <div class="row-actions">
-            <button class="btn primary" id="runBtn">Run event</button>
-            <kbd>R</kbd>
-            <span class="muted" id="runTime" style="margin-left:auto; font-size:12px;"></span>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <header><h2>Reference cases</h2><span class="aside">keys 1–5</span></header>
-        <ul class="cases" id="cases"></ul>
-      </section>
-
-      <section class="panel">
-        <header>
-          <h2>Run log</h2>
-          <span class="aside" id="logCount">0 runs</span>
-          <button class="btn small" id="logCsv" style="margin-left:8px">CSV</button>
-        </header>
-        <div class="log" id="log"><p class="empty">No runs yet.</p></div>
-      </section>
+  <!-- Header -->
+  <header>
+    <div>
+      <div class="brand-title">AcoustiSolar Inspection System</div>
+      <div class="brand-subtitle">Photovoltaic Module Micro-Crack Detection & Structural Diagnosis</div>
     </div>
+    <div class="system-status">
+      <span>SERVER: <span class="text-mono">127.0.0.1:8000</span></span>
+      <span class="status-badge online" id="serverStatusBadge">SYSTEM ONLINE</span>
+    </div>
+  </header>
 
-    <!-- centre: figures -->
-    <div class="stack">
-      <section class="panel">
-        <header>
-          <h2>Module plane and sensor records</h2>
-          <div class="toolbar" style="margin-left:auto">
-            <div class="seg" id="winSeg" title="Time window">
-              <button data-win="arrival" aria-pressed="true">Arrival window</button>
-              <button data-win="full" aria-pressed="false">Full record</button>
+  <!-- Navigation Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="tab-simulation" onclick="switchTab('tab-simulation')">Structural Simulation</button>
+    <button class="tab-btn" data-tab="tab-optical" onclick="switchTab('tab-optical')">Optical / EL Image Inspection</button>
+    <button class="tab-btn" data-tab="tab-reports" onclick="switchTab('tab-reports')">Inspection Log</button>
+  </div>
+
+  <main>
+    <!-- TAB 1: SOLAR PANEL PHYSICAL SIMULATION -->
+    <div id="tab-simulation" class="tab-content active">
+      <div class="grid-2col">
+
+        <!-- Left: Interactive PV Module -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h2>PV Module Array Map</h2>
+              <div class="subtitle">Click anywhere on the module to simulate a crack event or impact</div>
             </div>
-            <div class="seg" id="scaleSeg" title="Vertical scale">
-              <button data-scale="common" aria-pressed="true">Common scale</button>
-              <button data-scale="each" aria-pressed="false">Per channel</button>
+            <span class="status-badge">60-CELL MONO</span>
+          </div>
+          <div class="card-body">
+            <div class="panel-container">
+              <div class="panel-frame" id="pvFrame" onclick="handlePanelClick(event)">
+                <div class="solar-grid" id="solarGrid"></div>
+
+                <!-- 4 PZT Sensors -->
+                <div class="sensor-marker" style="left: 6%; top: 4%;">S1</div>
+                <div class="sensor-marker" style="left: 6%; top: 96%;">S2</div>
+                <div class="sensor-marker" style="left: 94%; top: 4%;">S3</div>
+                <div class="sensor-marker" style="left: 94%; top: 96%;">S4</div>
+
+                <!-- Dynamic Markers -->
+                <div id="impactMarker" class="impact-mark" style="display: none;"></div>
+                <div id="locMarker" class="loc-mark" style="display: none;"></div>
+                <div id="waveRipple" class="wave-ripple" style="display: none;"></div>
+              </div>
+            </div>
+
+            <!-- Coordinate / Cell Indicator -->
+            <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; color: var(--text-muted);">
+              <div>Target Point: <span class="text-mono" id="dispTargetCoords">X: 520.0 mm, Y: 880.0 mm</span></div>
+              <div>Target Cell: <span class="text-mono" id="dispTargetCell">Cell (R10, C3)</span></div>
             </div>
           </div>
-        </header>
-        <div class="figure-row">
-          <div class="plot-wrap" id="mapWrap"><canvas id="map" aria-label="Module plane"></canvas></div>
-          <div class="plot-wrap" id="scopeWrap"><canvas id="scope" aria-label="Four-channel sensor records"></canvas></div>
         </div>
-        <div class="readout" id="readout">Drag across the records to zoom, double-click to reset. Hover for values.</div>
-        <p class="caption">
-          <b>Fig. 1</b> Left: module plane with PZT sensors S1–S4, simulated source (●), TDOA estimate (+),
-          2σ error ellipse and the TDOA hyperbolae implied by the picked arrival-time differences.
-          Right: calibrated sensor voltage per channel (1 MS/s, 12-bit).
-          <span class="legend-inline" style="margin-top:6px">
-            <span><i class="sw" style="border-color:var(--ink-2)"></i>picked arrival</span>
-            <span><i class="sw dash" style="border-color:var(--ink-2)"></i>predicted S0 arrival from true source</span>
-            <span><i class="sw dot" style="border-color:var(--ink-3)"></i>source emission t₀</span>
-          </span>
-        </p>
-      </section>
 
-      <div class="lower-row">
-        <section class="panel">
-          <header>
-            <h2>Amplitude spectrum</h2>
-            <div class="seg" id="specSeg" style="margin-left:auto">
-              <button data-ch="0">CH1</button><button data-ch="1">CH2</button><button data-ch="2">CH3</button><button data-ch="3">CH4</button>
+        <!-- Right: Control Panel & Diagnosis -->
+        <div>
+          <!-- Diagnosis Verdict Card -->
+          <div class="card mb-12">
+            <div class="card-header">
+              <h2>Diagnostic Result</h2>
+              <span id="verdictTimestamp" class="text-mono" style="font-size: 11px; color: var(--text-muted);">Awaiting Run</span>
             </div>
-          </header>
-          <div class="plot-wrap" id="specWrap"><canvas id="spec" aria-label="Amplitude spectrum"></canvas></div>
-          <p class="caption" id="specCap"><b>Fig. 2</b> Power spectral density of 256 samples from the picked arrival (Hann window) and of the pre-event noise, in dB relative to the signal maximum.</p>
-        </section>
+            <div class="card-body">
+              <div id="verdictBox" class="verdict-box normal">
+                <div class="verdict-header">
+                  <span id="verdictText" class="verdict-title">READY TO SIMULATE</span>
+                  <span id="verdictConfidence" class="text-mono" style="font-size: 12px; font-weight: 700;">--</span>
+                </div>
+                <div id="verdictDetails" class="verdict-desc">Click on the PV module or press 'Execute Simulation' to test for crack formation.</div>
+              </div>
 
-        <section class="panel">
-          <header><h2>Arrival picks</h2><span class="aside" id="vS0"></span></header>
-          <table id="picks">
-            <thead><tr><th>Ch</th><th class="num">r (mm)</th><th class="num">t<sub>pick</sub> (µs)</th><th class="num">t<sub>S0</sub> (µs)</th><th class="num">Δ (µs)</th><th class="num">|V|<sub>max</sub> (mV)</th></tr></thead>
-            <tbody></tbody>
-          </table>
-          <p class="caption">r: distance from the true source. t<sub>S0</sub> = t₀ + r / v<sub>S0</sub>. Δ = t<sub>pick</sub> − t<sub>S0</sub>; a consistent positive Δ is picker latency, a single outlier is usually an A0 or reflected-wave pick.</p>
-        </section>
+              <!-- Metric Badges -->
+              <div class="metric-grid">
+                <div class="metric-card">
+                  <div class="label">Identified Cell</div>
+                  <div class="value" id="valCellId">--</div>
+                  <div class="unit" id="valCellMatch">Localization</div>
+                </div>
+                <div class="metric-card">
+                  <div class="label">Est. Crack Location</div>
+                  <div class="value" id="valEstCoords">--</div>
+                  <div class="unit">X, Y in mm</div>
+                </div>
+                <div class="metric-card">
+                  <div class="label">Position Error</div>
+                  <div class="value" id="valPosError">--</div>
+                  <div class="unit">mm from ground truth</div>
+                </div>
+                <div class="metric-card">
+                  <div class="label">Signal Peak</div>
+                  <div class="value" id="valPeakMv">--</div>
+                  <div class="unit">mV amplitude</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Simulation Settings Card -->
+          <div class="card mb-12">
+            <div class="card-header">
+              <h2>Simulation Parameters</h2>
+              <span class="subtitle">Tier-0 Digital Twin Settings</span>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Event Source Type</label>
+                <select class="form-select" id="simSourceType">
+                  <option value="crack_initiation">Silicon Crack Initiation (Brittle Wafer Cleavage)</option>
+                  <option value="crack_growth">Crack Propagation / Thermal Fatigue</option>
+                  <option value="crack_friction">Micro-Crack Friction / Rubbing</option>
+                  <option value="noise_hail">Hailstone Impact (Surface Mechanical Load)</option>
+                  <option value="noise_rain">Raindrop Impingement (Acoustic Noise)</option>
+                  <option value="noise_thermal">Thermal Expansion Tick (Frame Expansion)</option>
+                  <option value="noise_wind">Wind Load Vibration (Frame Rattle)</option>
+                  <option value="noise_inverter">Inverter Electromagnetic Burst (EMI)</option>
+                </select>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Impact Energy (a.u.)</label>
+                  <input type="number" class="form-input" id="simEnergy" value="1.5" min="0.1" max="20.0" step="0.1">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Module Temperature (°C)</label>
+                  <input type="number" class="form-input" id="simTemp" value="25.0" min="-20.0" max="85.0" step="1.0">
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 10px; margin-top: 6px;">
+                <button class="btn btn-primary" style="flex: 2;" onclick="runSimulation()">Execute Simulation</button>
+                <button class="btn btn-secondary" style="flex: 1;" onclick="setPresetSimulation('center_crack')">Center Crack</button>
+                <button class="btn btn-secondary" style="flex: 1;" onclick="setPresetSimulation('hail_impact')">Hail Load</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Oscilloscope Card -->
+          <div class="card">
+            <div class="card-header">
+              <h2>Acoustic Sensor Waveforms (TDOA)</h2>
+              <span class="subtitle">4-Channel PZT Transducer Response</span>
+            </div>
+            <div class="card-body">
+              <div class="scope-box">
+                <div class="scope-title">
+                  <span>CH1 (S1) · CH2 (S2) · CH3 (S3) · CH4 (S4)</span>
+                  <span id="scopeTdoaStats">Arrival DT: --</span>
+                </div>
+                <canvas id="scopeCanvas" width="700" height="180"></canvas>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
 
-    <!-- right: results -->
-    <div class="stack results">
-      <section class="panel">
-        <header><h2>Classification</h2><span class="aside" id="modelAside">gradient-boosted trees, 61 features</span></header>
-        <div class="decision" id="decision">
-          <div class="verdict" id="verdict">No event</div>
-          <div class="sub" id="verdictSub">Run an event or pick a reference case.</div>
-          <div class="pbar"><div class="fill" id="pfill" style="width:0"></div><div class="thr" id="pthr" style="left:50%"></div></div>
-          <div class="pscale"><span>P(new fracture) 0</span><span id="pval">—</span><span>1</span></div>
+    <!-- TAB 2: OPTICAL / EL IMAGE INSPECTION -->
+    <div id="tab-optical" class="tab-content">
+      <div class="card mb-12">
+        <div class="card-header">
+          <div>
+            <h2>Solar Cell Image Upload & Defect Classifier</h2>
+            <div class="subtitle">Upload high-resolution optical or electroluminescence (EL) solar cell imagery for micro-crack detection</div>
+          </div>
+          <span class="status-badge">CV + FEATURE EXTRACTION</span>
         </div>
-        <div class="body">
-          <table class="post" id="post"><tbody><tr><td class="muted">Class posterior appears here.</td></tr></tbody></table>
-        </div>
-        <p class="caption"><span class="nf">NF</span> counts towards P(new fracture). The model was trained on simulated events only; see the validation record for held-out performance.</p>
-      </section>
+        <div class="card-body">
+          <!-- Preset selector buttons -->
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">
+            Test with Benchmark Samples:
+          </div>
+          <div class="preset-selector">
+            <button class="preset-btn" id="btnPresetIntact" onclick="loadPresetImage('intact')">
+              <div class="preset-title">Sample 1: Intact Wafer</div>
+              <div class="preset-tag">Defect-Free (Pass)</div>
+            </button>
+            <button class="preset-btn active" id="btnPresetMicrocrack" onclick="loadPresetImage('microcrack')">
+              <div class="preset-title">Sample 2: Micro-Crack</div>
+              <div class="preset-tag">Diagonal Fracture</div>
+            </button>
+            <button class="preset-btn" id="btnPresetCross" onclick="loadPresetImage('cross_crack')">
+              <div class="preset-title">Sample 3: Cross-Crack</div>
+              <div class="preset-tag">Impact Fracture</div>
+            </button>
+            <button class="preset-btn" id="btnPresetBusbar" onclick="loadPresetImage('busbar_fracture')">
+              <div class="preset-title">Sample 4: Busbar Break</div>
+              <div class="preset-tag">Conductor Severed</div>
+            </button>
+          </div>
 
-      <section class="panel">
-        <header><h2>Localisation</h2><span class="aside">gated TDOA, Huber + leave-one-out</span></header>
-        <div class="body"><table class="kv" id="locTable"><tbody></tbody></table></div>
-      </section>
-
-      <section class="panel">
-        <header><h2>Waveform features</h2><span class="aside">CH1</span></header>
-        <div class="body"><table class="kv" id="featTable"><tbody></tbody></table></div>
-      </section>
-
-      <section class="panel">
-        <header><h2>Run</h2></header>
-        <div class="body">
-          <table class="kv" id="runTable"><tbody></tbody></table>
-          <div class="row-actions">
-            <button class="btn small" id="exportJson" disabled>Export JSON</button>
-            <button class="btn small" id="exportCsv" disabled>Waveforms CSV</button>
-            <button class="btn small" id="copyLink" disabled>Copy link</button>
+          <!-- Drag and Drop upload box -->
+          <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+            <input type="file" id="fileInput" accept="image/png, image/jpeg, image/jpg" onchange="handleFileUpload(event)">
+            <div class="dropzone-title">Upload Solar Panel / Cell Image</div>
+            <div class="dropzone-hint">Drag and drop any solar cell image here, or click to browse (PNG, JPG)</div>
           </div>
         </div>
-      </section>
+      </div>
+
+      <!-- Image Inspection Results Card -->
+      <div class="card" id="imageResultCard">
+        <div class="card-header">
+          <h2>Inspection Diagnosis & Defect Tracing</h2>
+          <span id="imgResultStatus" class="status-badge">Analyzed</span>
+        </div>
+        <div class="card-body">
+          <!-- Verdict box -->
+          <div id="imgVerdictBox" class="verdict-box defect">
+            <div class="verdict-header">
+              <span id="imgVerdictTitle" class="verdict-title">CRACK DETECTED</span>
+              <span id="imgConfidence" class="text-mono" style="font-size: 12px; font-weight: 700;">99.0% Confidence</span>
+            </div>
+            <div id="imgVerdictDesc" class="verdict-desc">Active silicon fracture traversing wafer finger lines. Potential hot-spot risk.</div>
+          </div>
+
+          <!-- Metrics -->
+          <div class="metric-grid">
+            <div class="metric-card">
+              <div class="label">Classification</div>
+              <div class="value" id="imgMetricClass" style="font-size: 13px;">Transverse Micro-Crack</div>
+              <div class="unit">Defect Category</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">Total Crack Length</div>
+              <div class="value" id="imgMetricLength">252.4 mm</div>
+              <div class="unit">Cumulative span</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">Severity Level</div>
+              <div class="value" id="imgMetricSeverity">Severe</div>
+              <div class="unit">Structural Risk</div>
+            </div>
+            <div class="metric-card">
+              <div class="label">Power Output Loss</div>
+              <div class="value" id="imgMetricLoss">-18.2%</div>
+              <div class="unit">Estimated drop</div>
+            </div>
+          </div>
+
+          <!-- Side-by-side images -->
+          <div class="image-preview-grid">
+            <div class="image-view-card">
+              <div class="image-view-header">Source Imagery (Raw Solar Cell)</div>
+              <div class="image-view-body">
+                <img id="rawCellImage" src="" alt="Source Solar Cell">
+              </div>
+            </div>
+            <div class="image-view-card">
+              <div class="image-view-header">Defect Segmentation & Crack Paths (Annotated)</div>
+              <div class="image-view-body">
+                <img id="annotatedCellImage" src="" alt="Annotated Crack Inspection">
+              </div>
+            </div>
+          </div>
+
+          <!-- Recommendation box -->
+          <div style="margin-top: 16px; padding: 12px 14px; background: #f8fafc; border: 1px solid var(--border); border-radius: 4px;">
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px;">
+              Maintenance Recommendation
+            </div>
+            <div id="imgRecommendationText" style="font-size: 13px; color: var(--text);">
+              High risk of localized hot-spots and bypass diode overload. Immediate cell replacement advised.
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
-  </div>
-</section>
 
-<!-- ================================================================== VALIDATION VIEW -->
-<section class="view" id="view-validation" hidden>
-  <p class="val-intro">
-    Every value on this page is read from the result files written by the validation scripts
-    (<span class="mono">validation/kpi_benchmark_summary.json</span>, <span class="mono">validation/out/vv_suite_results.json</span>,
-    <span class="mono">data/reproducibility_proof.json</span>). Nothing here is typed in by hand.
-    <b>All results are from simulated data;</b> no measurements on real modules have been made yet.
-  </p>
-  <div class="val-grid">
-    <div class="stack">
-      <section class="panel">
-        <header><h2>Held-out benchmark against design targets</h2><span class="aside" id="benchMeta"></span></header>
-        <table class="val-table" id="benchTable"><tbody><tr><td class="empty">Loading…</td></tr></tbody></table>
-        <p class="note" id="benchNote"></p>
-      </section>
-      <section class="panel">
-        <header><h2>Per-class F1 on unseen modules</h2></header>
-        <table class="val-table" id="classTable"><tbody></tbody></table>
-      </section>
+    <!-- TAB 3: INSPECTION LOG -->
+    <div id="tab-reports" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2>Inspection Audit Log</h2>
+            <div class="subtitle">History of physical acoustic simulations and optical image inspections</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="clearInspectionLog()">Clear History</button>
+        </div>
+        <div class="card-body">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Method</th>
+                  <th>Source / Cell</th>
+                  <th>Verdict</th>
+                  <th>Classification</th>
+                  <th>Confidence</th>
+                  <th>Severity / Error</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                <!-- Log rows dynamically appended -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="stack">
-      <section class="panel">
-        <header><h2>Physics verification suite</h2><span class="aside" id="vvMeta"></span></header>
-        <table class="val-table" id="vvTable"><tbody><tr><td class="empty">Loading…</td></tr></tbody></table>
-      </section>
-      <section class="panel">
-        <header><h2>Detection and open-set behaviour</h2></header>
-        <table class="val-table" id="detTable"><tbody></tbody></table>
-      </section>
-      <section class="panel">
-        <header><h2>Reproducibility</h2></header>
-        <table class="val-table" id="reproTable"><tbody></tbody></table>
-      </section>
-    </div>
-  </div>
-</section>
-</main>
+  </main>
 
-<script>
-"use strict";
+  <script>
+    // State variables
+    let currentX = 480.0;
+    let currentY = 720.0;
+    const moduleWidth = 1040.0;
+    const moduleLength = 1760.0;
+    const inspectionHistory = [];
 
-/* ------------------------------------------------------------------ constants */
-const MODULE = { W: 1040, L: 1760, rows: 20, cols: 6 };
-const CLASS_NAMES = {
-  crack_initiation: "Crack initiation", crack_growth: "Crack growth", crack_friction: "Crack-face friction",
-  hail_crack: "Hail-induced crack", hail: "Hail impact", rain: "Rain impact", wind_rattle: "Wind rattle",
-  thermal_tick: "Thermal tick", emi_burst: "EMI burst", handling_tap: "Handling tap",
-};
-const SOURCE_NAMES = {
-  crack_initiation: "Crack initiation", crack_growth: "Crack growth", crack_friction: "Crack-face friction",
-  noise_rain: "Rain impact", noise_hail: "Hail impact", noise_wind: "Wind rattle",
-  noise_thermal: "Thermal tick", noise_inverter: "Inverter EMI burst",
-};
-// Fixed seeds so a reference case gives the same event every time it is run.
-const CASES = [
-  { id: "crack_center", title: "Crack initiation, centre cell", type: "crack_initiation", x: 560, y: 930, E: 2.0, T: 25, seed: 101,
-    desc: "Diagonal crack in cell R11/C4; all four sensors receive a clear S0 head wave." },
-  { id: "crack_busbar", title: "Crack growth near a busbar", type: "crack_growth", x: 300, y: 1320, E: 1.8, T: 25, seed: 102,
-    desc: "Growth step parallel to the busbar, upper-left quadrant." },
-  { id: "noise_rain", title: "Rain-drop impact", type: "noise_rain", x: 700, y: 450, E: 0.5, T: 25, seed: 103,
-    desc: "Out-of-plane impact, A0-dominated; should not raise an alarm." },
-  { id: "noise_inverter", title: "Inverter EMI burst", type: "noise_inverter", x: 200, y: 200, E: 0.8, T: 25, seed: 104,
-    desc: "Electrical pickup, simultaneous on all channels; no propagation delay." },
-  { id: "equidistant", title: "Source equidistant from all sensors", type: "crack_initiation", x: 520, y: 880, E: 2.0, T: 25, seed: 305, limit: true,
-    desc: "At the exact centre all arrivals coincide, which is the signature of EMI; a real crack here is labelled EMI in about 4 of 5 seeds." },
-];
-
-/* ------------------------------------------------------------------ helpers */
-const $ = (sel, root = document) => root.querySelector(sel);
-const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-const isNum = v => typeof v === "number" && isFinite(v);
-const fmt = (v, d = 1) => (isNum(v) ? v.toFixed(d) : "—");
-const signed = (v, d = 1) => (isNum(v) ? (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(d) : "—");
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const chColor = i => cssVar(`--ch${i + 1}`);
-
-function niceStep(span, target) {
-  const raw = span / Math.max(1, target);
-  const p = Math.pow(10, Math.floor(Math.log10(raw)));
-  const m = raw / p;
-  return (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p;
-}
-function ticks(lo, hi, target) {
-  const s = niceStep(hi - lo, target), out = [];
-  for (let v = Math.ceil(lo / s) * s; v <= hi + s * 1e-6; v += s) out.push(+v.toPrecision(12));
-  return out;
-}
-function niceCeil(x) {
-  if (!(x > 0)) return 1;
-  const p = Math.pow(10, Math.floor(Math.log10(x)));
-  const m = x / p;
-  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
-}
-const tickLabel = v => (Math.abs(v) >= 100 || Number.isInteger(v) ? String(Math.round(v)) : String(+v.toPrecision(3)));
-
-// HiDPI canvas sized to its container width.
-function prepCanvas(canvas, width, height) {
-  const dpr = window.devicePixelRatio || 1;
-  canvas.style.width = width + "px";
-  canvas.style.height = height + "px";
-  canvas.width = Math.round(width * dpr);
-  canvas.height = Math.round(height * dpr);
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.font = `11px ${cssVar("--mono")}`;
-  ctx.textBaseline = "middle";
-  return ctx;
-}
-
-// In-place iterative radix-2 FFT.
-function fft(re, im) {
-  const n = re.length;
-  for (let i = 1, j = 0; i < n; i++) {
-    let bit = n >> 1;
-    for (; j & bit; bit >>= 1) j ^= bit;
-    j ^= bit;
-    if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
-  }
-  for (let len = 2; len <= n; len <<= 1) {
-    const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang);
-    for (let i = 0; i < n; i += len) {
-      let cr = 1, ci = 0;
-      for (let k = 0; k < len / 2; k++) {
-        const a = i + k, b = a + len / 2;
-        const tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
-        re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
-        [cr, ci] = [cr * wr - ci * wi, cr * wi + ci * wr];
+    // Initialize 6x20 Solar Grid
+    function initSolarGrid() {
+      const grid = document.getElementById("solarGrid");
+      grid.innerHTML = "";
+      for (let r = 0; r < 20; r++) {
+        for (let c = 0; c < 6; c++) {
+          const cell = document.createElement("div");
+          cell.className = "solar-cell";
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          grid.appendChild(cell);
+        }
       }
     }
-  }
-}
 
-// One-sided PSD of x[start, start+len) with a Hann window, zero-padded to nfft.
-function psd(x, start, len, nfft) {
-  const re = new Float64Array(nfft), im = new Float64Array(nfft);
-  let wsum = 0;
-  for (let i = 0; i < len; i++) {
-    const w = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (len - 1));
-    const v = x[start + i];
-    re[i] = (isNum(v) ? v : 0) * w;
-    wsum += w * w;
-  }
-  fft(re, im);
-  const out = new Float64Array(nfft / 2 + 1);
-  for (let k = 0; k <= nfft / 2; k++) out[k] = (re[k] * re[k] + im[k] * im[k]) / wsum;
-  return out;
-}
+    // Switch active tab
+    function switchTab(tabId) {
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.tab === tabId);
+      });
+      document.querySelectorAll(".tab-content").forEach(content => {
+        content.classList.toggle("active", content.id === tabId);
+      });
+      if (tabId === "tab-optical" && !document.getElementById("annotatedCellImage").src) {
+        loadPresetImage("microcrack");
+      }
+    }
 
-/* ------------------------------------------------------------------ state */
-const state = {
-  data: null,          // last /api/simulate response
-  win: "arrival",      // arrival | full
-  zoom: null,          // [t0, t1] µs after a drag, overrides win
-  scale: "common",     // common | each
-  specCh: null,        // null = earliest-arrival channel
-  hoverT: null,
-  drag: null,
-  mapHover: null,
-  caseId: null,
-  log: [],
-  selectedLog: -1,
-  busy: false,
-};
+    // Handle click on PV frame to target simulation
+    function handlePanelClick(event) {
+      const frame = document.getElementById("pvFrame");
+      const rect = frame.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const clickY = event.clientY - rect.top;
 
-/* ------------------------------------------------------------------ theme */
-// Light/dark: an explicit choice is remembered; otherwise follow the operating system.
-function setThemeAttr(t) {
-  document.documentElement.dataset.theme = t;
-  $$("#themeToggle button").forEach(b => b.setAttribute("aria-checked", String(b.dataset.themeChoice === t)));
-}
-function applyTheme(t, remember = true) {
-  setThemeAttr(t);
-  if (remember) { try { localStorage.setItem("as-theme", t); } catch (e) { /* storage unavailable */ } }
-  redrawAll();  // canvases read the colour tokens at draw time
-}
-const systemDark = window.matchMedia ? matchMedia("(prefers-color-scheme: dark)") : null;
-function storedTheme() { try { return localStorage.getItem("as-theme"); } catch (e) { return null; } }
-setThemeAttr(storedTheme() || (systemDark && systemDark.matches ? "dark" : "light"));
-$("#themeToggle").addEventListener("click", e => {
-  const b = e.target.closest("button[data-theme-choice]");
-  if (b) applyTheme(b.dataset.themeChoice);
-});
-$("#themeToggle").addEventListener("keydown", e => {
-  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-  applyTheme(next);
-  $(`#themeToggle button[data-theme-choice="${next}"]`).focus();
-});
-if (systemDark && systemDark.addEventListener) {
-  systemDark.addEventListener("change", ev => { if (!storedTheme()) applyTheme(ev.matches ? "dark" : "light", false); });
-}
+      const normX = Math.max(0, Math.min(1, clickX / rect.width));
+      const normY = Math.max(0, Math.min(1, clickY / rect.height));
 
-/* ------------------------------------------------------------------ tabs */
-$$(".tab").forEach(tab => tab.addEventListener("click", () => {
-  $$(".tab").forEach(t => t.setAttribute("aria-selected", String(t === tab)));
-  $$(".view").forEach(v => { v.hidden = v.id !== "view-" + tab.dataset.view; });
-  if (tab.dataset.view === "event") redrawAll();
-}));
+      currentX = +(normX * moduleWidth).toFixed(1);
+      currentY = +(normY * moduleLength).toFixed(1);
 
-/* ------------------------------------------------------------------ form */
-const inputs = {
-  type: $("#srcType"), x: $("#srcX"), y: $("#srcY"), E: $("#srcE"), T: $("#srcT"),
-  seed: $("#srcSeed"), fixed: $("#seedFixed"),
-};
-inputs.E.addEventListener("input", () => { $("#srcEv").value = (+inputs.E.value).toFixed(1); });
-inputs.T.addEventListener("input", () => { $("#srcTv").value = inputs.T.value; });
-[inputs.type, inputs.x, inputs.y, inputs.E, inputs.T, inputs.seed].forEach(el =>
-  el.addEventListener("change", () => { state.caseId = null; renderCases(); drawMap(); }));
+      updateTargetDisplay(clickX, clickY);
+      runSimulation();
+    }
 
-function readForm() {
-  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-  return {
-    source_type: inputs.type.value,
-    x_mm: clamp(+inputs.x.value || 0, 0, MODULE.W),
-    y_mm: clamp(+inputs.y.value || 0, 0, MODULE.L),
-    energy: +inputs.E.value,
-    temperature_c: +inputs.T.value,
-    seed: inputs.fixed.checked ? Math.max(0, Math.floor(+inputs.seed.value || 0)) : null,
-  };
-}
-function writeForm(p) {
-  inputs.type.value = p.source_type;
-  inputs.x.value = Math.round(p.x_mm);
-  inputs.y.value = Math.round(p.y_mm);
-  inputs.E.value = p.energy; $("#srcEv").value = (+p.energy).toFixed(1);
-  inputs.T.value = p.temperature_c; $("#srcTv").value = p.temperature_c;
-  if (p.seed !== null && p.seed !== undefined) { inputs.seed.value = p.seed; inputs.fixed.checked = true; }
-}
+    function updateTargetDisplay(pxX, pxY) {
+      const frame = document.getElementById("pvFrame");
+      const rect = frame.getBoundingClientRect();
+      if (!pxX) {
+        pxX = (currentX / moduleWidth) * rect.width;
+        pxY = (currentY / moduleLength) * rect.height;
+      }
 
-/* ------------------------------------------------------------------ reference cases */
-function renderCases() {
-  $("#cases").innerHTML = CASES.map((c, i) => `
-    <li><button class="case${c.limit ? " limit" : ""}" data-i="${i}" aria-current="${state.caseId === c.id}">
-      <span class="n">${i + 1}</span><span class="t">${esc(c.title)}</span>
-      <span class="d">${esc(c.desc)}</span>
-      <span class="p">(${c.x}, ${c.y}) mm · E ${c.E.toFixed(1)} · ${c.T} °C · seed ${c.seed}</span>
-    </button></li>`).join("");
-  $$(".case").forEach(b => b.addEventListener("click", () => runCase(+b.dataset.i)));
-}
-function runCase(i) {
-  const c = CASES[i];
-  if (!c) return;
-  state.caseId = c.id;
-  writeForm({ source_type: c.type, x_mm: c.x, y_mm: c.y, energy: c.E, temperature_c: c.T, seed: c.seed });
-  renderCases();
-  run();
-}
-// kept for older scripts that call the previous preset names
-window.triggerPreset = id => runCase(Math.max(0, CASES.findIndex(c => c.id === id)));
+      const col = Math.min(5, Math.floor((currentX / moduleWidth) * 6));
+      const row = Math.min(19, Math.floor((currentY / moduleLength) * 20));
 
-/* ------------------------------------------------------------------ API */
-async function run(params) {
-  if (state.busy) return;
-  const p = params || readForm();
-  state.busy = true;
-  $("#runBtn").disabled = true;
-  $("#runBtn").textContent = "Running…";
-  const t0 = performance.now();
-  try {
-    const res = await fetch("/api/simulate", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p),
+      document.getElementById("dispTargetCoords").textContent = `X: ${currentX} mm, Y: ${currentY} mm`;
+      document.getElementById("dispTargetCell").textContent = `Cell (R${row + 1}, C${col + 1})`;
+
+      // Highlight cell in grid
+      document.querySelectorAll(".solar-cell").forEach(cell => cell.classList.remove("cell-selected"));
+      const cellElem = document.querySelector(`.solar-cell[data-row='${row}'][data-col='${col}']`);
+      if (cellElem) cellElem.classList.add("cell-selected");
+
+      // Place impact marker
+      const marker = document.getElementById("impactMarker");
+      marker.style.left = pxX + "px";
+      marker.style.top = pxY + "px";
+      marker.style.display = "block";
+
+      // Trigger wave animation
+      const ripple = document.getElementById("waveRipple");
+      ripple.style.left = pxX + "px";
+      ripple.style.top = pxY + "px";
+      ripple.style.display = "block";
+      ripple.classList.remove("wave-ripple");
+      void ripple.offsetWidth;
+      ripple.classList.add("wave-ripple");
+    }
+
+    // Run acoustic simulation API
+    async function runSimulation() {
+      const sourceType = document.getElementById("simSourceType").value;
+      const energy = parseFloat(document.getElementById("simEnergy").value) || 1.5;
+      const temp = parseFloat(document.getElementById("simTemp").value) || 25.0;
+
+      const payload = {
+        x_mm: currentX,
+        y_mm: currentY,
+        source_type: sourceType,
+        energy: energy,
+        temperature_c: temp
+      };
+
+      try {
+        const resp = await fetch("/api/simulate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        renderSimulationResults(data);
+      } catch (err) {
+        console.error("Simulation error:", err);
+      }
+    }
+
+    function renderSimulationResults(data) {
+      const gt = data.ground_truth;
+      const rec = data.reconstruction;
+      const ml = data.ml_inference;
+      const feat = data.features;
+      const osc = data.oscilloscope;
+
+      // Verdict box
+      const isDefect = ml.is_crack_pred === 1;
+      const vBox = document.getElementById("verdictBox");
+      const vText = document.getElementById("verdictText");
+      const vConf = document.getElementById("verdictConfidence");
+      const vDesc = document.getElementById("verdictDetails");
+
+      vBox.className = "verdict-box " + (isDefect ? "defect" : "normal");
+      vText.textContent = isDefect ? "CRACK DETECTED" : "NO CRACK DETECTED";
+      vConf.textContent = `${ml.confidence}% Confidence`;
+      vDesc.textContent = isDefect
+        ? `Acoustic emission signature confirms ${ml.predicted_source.replace(/_/g, ' ')} at ${gt.cell_id}. Micro-crack formation confirmed.`
+        : `Transient acoustic event registered (${gt.source_type.replace(/_/g, ' ')}). Normal module operation confirmed without structural fracture.`;
+
+      document.getElementById("verdictTimestamp").textContent = new Date().toLocaleTimeString();
+
+      // Metrics
+      document.getElementById("valCellId").textContent = rec.cell_id || gt.cell_id;
+      document.getElementById("valCellMatch").textContent = rec.cell_matched ? "Cell Match Confirmed" : "Approx. Localization";
+      document.getElementById("valEstCoords").textContent = rec.x_mm ? `${rec.x_mm}, ${rec.y_mm}` : "N/A";
+      document.getElementById("valPosError").textContent = rec.error_mm !== null ? `${rec.error_mm} mm` : "N/A";
+      document.getElementById("valPeakMv").textContent = `${feat.peak_amp_mv} mV`;
+
+      // Update damaged cell styling in grid
+      document.querySelectorAll(".solar-cell").forEach(c => c.classList.remove("cell-damaged"));
+      if (isDefect && gt.cell_row >= 0 && gt.cell_col >= 0) {
+        const damagedCell = document.querySelector(`.solar-cell[data-row='${gt.cell_row}'][data-col='${gt.cell_col}']`);
+        if (damagedCell) damagedCell.classList.add("cell-damaged");
+      }
+
+      // Draw oscilloscope
+      drawOscilloscope(osc);
+
+      // Log to history
+      logInspection({
+        method: "Acoustic Simulation",
+        source: gt.cell_id + ` (${gt.x_mm}, ${gt.y_mm})`,
+        verdict: isDefect ? "CRACK DETECTED" : "NORMAL",
+        classification: ml.predicted_source || gt.source_type,
+        confidence: `${ml.confidence}%`,
+        metric: isDefect ? `Loc Error: ${rec.error_mm} mm` : "Pass"
+      });
+    }
+
+    function setPresetSimulation(type) {
+      if (type === "center_crack") {
+        currentX = 480.0;
+        currentY = 720.0;
+        document.getElementById("simSourceType").value = "crack_initiation";
+      } else if (type === "hail_impact") {
+        currentX = 260.0;
+        currentY = 440.0;
+        document.getElementById("simSourceType").value = "noise_hail";
+      }
+      updateTargetDisplay();
+      runSimulation();
+    }
+
+    // Draw Oscilloscope Waves
+    function drawOscilloscope(osc) {
+      const canvas = document.getElementById("scopeCanvas");
+      const ctx = canvas.getContext("2d");
+      const w = canvas.width;
+      const h = canvas.height;
+
+      ctx.fillStyle = "#020617";
+      ctx.fillRect(0, 0, w, h);
+
+      // Grid lines
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < w; x += 50) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      }
+      for (let y = 0; y < h; y += 30) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+
+      const colors = ["#38bdf8", "#4ade80", "#facc15", "#f43f5e"];
+      const waves = [osc.waveforms.ch1, osc.waveforms.ch2, osc.waveforms.ch3, osc.waveforms.ch4];
+
+      waves.forEach((wave, idx) => {
+        if (!wave || !wave.length) return;
+        ctx.strokeStyle = colors[idx];
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        const stepX = w / wave.length;
+        const baselineY = (h / 5) * (idx + 1);
+
+        for (let i = 0; i < wave.length; i++) {
+          const val = wave[i];
+          const y = baselineY - (val * 0.4);
+          if (i === 0) ctx.moveTo(0, y);
+          else ctx.lineTo(i * stepX, y);
+        }
+        ctx.stroke();
+
+        // Channel label
+        ctx.fillStyle = colors[idx];
+        ctx.font = "9px monospace";
+        ctx.fillText(`CH${idx + 1}`, 6, baselineY - 10);
+      });
+    }
+
+    // Optical Image Inspection Functions
+    async function loadPresetImage(presetName) {
+      document.querySelectorAll(".preset-btn").forEach(b => b.classList.remove("active"));
+      const btn = document.getElementById("btnPreset" + presetName.charAt(0).toUpperCase() + presetName.slice(1).replace("_", ""));
+      if (btn) btn.classList.add("active");
+
+      try {
+        const resp = await fetch(`/api/preset-image/${presetName}`);
+        const data = await resp.json();
+        renderImageResults(data);
+      } catch (err) {
+        console.error("Preset load error:", err);
+      }
+    }
+
+    async function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const resp = await fetch("/api/upload-image", {
+          method: "POST",
+          body: formData
+        });
+        const data = await resp.json();
+        renderImageResults(data);
+      } catch (err) {
+        console.error("File upload inspection error:", err);
+      }
+    }
+
+    function renderImageResults(data) {
+      const isDefect = data.is_crack_detected;
+      const vBox = document.getElementById("imgVerdictBox");
+      const vTitle = document.getElementById("imgVerdictTitle");
+      const vConf = document.getElementById("imgConfidence");
+      const vDesc = document.getElementById("imgVerdictDesc");
+
+      vBox.className = "verdict-box " + (isDefect ? "defect" : "normal");
+      vTitle.textContent = data.verdict;
+      vConf.textContent = `${data.confidence_pct}% Confidence`;
+      vDesc.textContent = data.recommendation;
+
+      document.getElementById("imgMetricClass").textContent = data.classification;
+      document.getElementById("imgMetricLength").textContent = `${data.crack_length_mm} mm`;
+      document.getElementById("imgMetricSeverity").textContent = data.severity;
+      document.getElementById("imgMetricLoss").textContent = `-${data.power_loss_est_pct}%`;
+
+      document.getElementById("rawCellImage").src = data.original_image_b64;
+      document.getElementById("annotatedCellImage").src = data.annotated_image_b64;
+      document.getElementById("imgRecommendationText").textContent = data.recommendation;
+
+      // Log inspection
+      logInspection({
+        method: "Optical / EL Scan",
+        source: "Solar Cell Image",
+        verdict: isDefect ? "CRACK DETECTED" : "PASS (INTACT)",
+        classification: data.classification,
+        confidence: `${data.confidence_pct}%`,
+        metric: isDefect ? `Length: ${data.crack_length_mm} mm` : "Defect-Free"
+      });
+    }
+
+    // Drag and drop setup
+    const dropzone = document.getElementById("dropzone");
+    ["dragenter", "dragover"].forEach(name => {
+      dropzone.addEventListener(name, (e) => { e.preventDefault(); dropzone.classList.add("dragover"); });
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const ms = performance.now() - t0;
-    $("#runTime").textContent = `${Math.round(ms)} ms`;
-    if (!inputs.fixed.checked) inputs.seed.value = data.run.seed;
-    state.data = data;
-    state.zoom = null;
-    state.specCh = null;
-    addLog(p, data);
-    updateHash(data);
-    render();
-  } catch (err) {
-    setStatus("bad", "Simulation request failed: " + err.message);
-  } finally {
-    state.busy = false;
-    $("#runBtn").disabled = false;
-    $("#runBtn").textContent = "Run event";
-  }
-}
-$("#runBtn").addEventListener("click", () => run());
-
-function setStatus(kind, text, title) {
-  const el = $("#status");
-  el.className = "status " + kind;
-  el.querySelector("span").textContent = text;
-  el.title = title || "";
-}
-
-/* ------------------------------------------------------------------ derived quantities */
-function sensors() {
-  return state.data ? state.data.module.sensors : [
-    { name: "S1", x_mm: 60, y_mm: 60 }, { name: "S2", x_mm: 60, y_mm: 1640 },
-    { name: "S3", x_mm: 980, y_mm: 60 }, { name: "S4", x_mm: 980, y_mm: 1640 }];
-}
-function predictedArrivals(d) {
-  const v = d.run.s0_velocity_m_s * 1e-3; // mm/µs
-  return d.module.sensors.map(s => d.run.source_onset_us + Math.hypot(s.x_mm - d.ground_truth.x_mm, s.y_mm - d.ground_truth.y_mm) / v);
-}
-function picks(d) { return d.reconstruction.arrival_us || [null, null, null, null]; }
-function timeWindow() {
-  const d = state.data;
-  const n = d ? d.oscilloscope.samples_mv[0].length : 2560;
-  if (state.zoom) return state.zoom;
-  if (state.win === "full" || !d) return [0, n];
-  const ts = picks(d).filter(isNum);
-  const ref = ts.length ? Math.min(...ts) : d.run.source_onset_us;
-  const t0 = Math.max(0, ref - 140);
-  return [t0, Math.min(n, t0 + 640)];
-}
-
-/* ------------------------------------------------------------------ Fig. 1a: module plane */
-const MAP_M = { l: 46, r: 12, t: 12, b: 36 };
-function mapGeometry() {
-  const width = $("#mapWrap").clientWidth;
-  const pw = width - MAP_M.l - MAP_M.r;
-  const ph = pw * MODULE.L / MODULE.W;
-  return { width, height: ph + MAP_M.t + MAP_M.b, pw, ph,
-    X: x => MAP_M.l + x / MODULE.W * pw, Y: y => MAP_M.t + ph - y / MODULE.L * ph,
-    invX: px => (px - MAP_M.l) / pw * MODULE.W, invY: py => (MAP_M.t + ph - py) / ph * MODULE.L };
-}
-
-function drawMap() {
-  const cv = $("#map");
-  const g = mapGeometry();
-  const ctx = prepCanvas(cv, g.width, g.height);
-  const ink2 = cssVar("--ink-2"), ink3 = cssVar("--ink-3"), grid = cssVar("--grid"), rule = cssVar("--rule-strong");
-  const accent = cssVar("--accent"), alarm = cssVar("--alarm");
-  const d = state.data;
-
-  ctx.fillStyle = cssVar("--plot-bg");
-  ctx.fillRect(g.X(0), g.Y(MODULE.L), g.pw, g.ph);
-
-  // cell grid
-  ctx.strokeStyle = grid; ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let c = 1; c < MODULE.cols; c++) { const x = Math.round(g.X(c * MODULE.W / MODULE.cols)) + .5; ctx.moveTo(x, g.Y(0)); ctx.lineTo(x, g.Y(MODULE.L)); }
-  for (let r = 1; r < MODULE.rows; r++) { const y = Math.round(g.Y(r * MODULE.L / MODULE.rows)) + .5; ctx.moveTo(g.X(0), y); ctx.lineTo(g.X(MODULE.W), y); }
-  ctx.stroke();
-
-  const cellRect = (row, col) => [g.X(col * MODULE.W / MODULE.cols), g.Y((row + 1) * MODULE.L / MODULE.rows),
-    g.pw / MODULE.cols, g.ph / MODULE.rows];
-  if (d) {
-    const gt = d.ground_truth, rc = d.reconstruction;
-    ctx.fillStyle = cssVar("--accent-soft");
-    ctx.fillRect(...cellRect(gt.cell_row, gt.cell_col));
-    if (rc.cell_row >= 0) {
-      ctx.strokeStyle = accent; ctx.lineWidth = 1;
-      const [x, y, w, h] = cellRect(rc.cell_row, rc.cell_col);
-      ctx.strokeRect(Math.round(x) + .5, Math.round(y) + .5, Math.round(w) - 1, Math.round(h) - 1);
-    }
-  }
-
-  // frame
-  ctx.strokeStyle = ink2; ctx.lineWidth = 1;
-  ctx.strokeRect(Math.round(g.X(0)) + .5, Math.round(g.Y(MODULE.L)) + .5, Math.round(g.pw), Math.round(g.ph));
-
-  // axes
-  ctx.fillStyle = ink3; ctx.strokeStyle = ink3;
-  ctx.textAlign = "center";
-  ticks(0, MODULE.W, 4).forEach(v => {
-    const x = g.X(v);
-    ctx.beginPath(); ctx.moveTo(x, g.Y(0)); ctx.lineTo(x, g.Y(0) + 4); ctx.stroke();
-    ctx.fillText(tickLabel(v), x, g.Y(0) + 12);
-  });
-  ctx.fillText("x (mm)", g.X(MODULE.W / 2), g.height - 9);
-  ctx.textAlign = "right";
-  ticks(0, MODULE.L, 8).forEach(v => {
-    const y = g.Y(v);
-    ctx.beginPath(); ctx.moveTo(g.X(0), y); ctx.lineTo(g.X(0) - 4, y); ctx.stroke();
-    ctx.fillText(tickLabel(v), g.X(0) - 6, y);
-  });
-  ctx.save();
-  ctx.translate(11, g.Y(MODULE.L / 2)); ctx.rotate(-Math.PI / 2); ctx.textAlign = "center";
-  ctx.fillText("y (mm)", 0, 0);
-  ctx.restore();
-
-  if (d) drawHyperbolae(ctx, g, d);
-
-  // sensors
-  sensors().forEach((s, i) => {
-    const x = g.X(s.x_mm), y = g.Y(s.y_mm);
-    ctx.fillStyle = chColor(i);
-    ctx.fillRect(x - 4.5, y - 4.5, 9, 9);
-    ctx.fillStyle = ink2; ctx.textAlign = "left";
-    ctx.fillText(s.name, x + (s.x_mm > MODULE.W / 2 ? -22 : 8), y + (s.y_mm > MODULE.L / 2 ? 12 : -11));
-  });
-
-  if (d) {
-    const gt = d.ground_truth, rc = d.reconstruction;
-    const sx = g.X(gt.x_mm), sy = g.Y(gt.y_mm);
-    // error ellipse (2σ), angle measured in the module frame (y up)
-    if (isNum(rc.x_mm) && isNum(rc.uncertainty_semi_major_mm)) {
-      const ex = g.X(rc.x_mm), ey = g.Y(rc.y_mm);
-      const a = rc.uncertainty_semi_major_mm / MODULE.W * g.pw;
-      const b = (isNum(rc.uncertainty_semi_minor_mm) ? rc.uncertainty_semi_minor_mm : rc.uncertainty_semi_major_mm) / MODULE.W * g.pw;
-      const th = -(rc.uncertainty_angle_deg || 0) * Math.PI / 180;
-      ctx.strokeStyle = accent; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-      ctx.beginPath(); ctx.ellipse(ex, ey, Math.max(a, 1), Math.max(b, 1), th, 0, 2 * Math.PI); ctx.stroke();
-      ctx.setLineDash([]);
-      // residual vector
-      ctx.strokeStyle = ink3;
-      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
-      // estimate
-      ctx.strokeStyle = accent; ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.moveTo(ex - 7, ey); ctx.lineTo(ex + 7, ey); ctx.moveTo(ex, ey - 7); ctx.lineTo(ex, ey + 7); ctx.stroke();
-    }
-    // true source
-    ctx.fillStyle = gt.is_crack ? alarm : cssVar("--ink");
-    ctx.beginPath(); ctx.arc(sx, sy, 4, 0, 2 * Math.PI); ctx.fill();
-  } else {
-    // planned position from the form
-    const p = readForm();
-    ctx.strokeStyle = ink2; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(g.X(p.x_mm), g.Y(p.y_mm), 4, 0, 2 * Math.PI); ctx.stroke();
-  }
-
-  // hover crosshair
-  if (state.mapHover) {
-    const { x, y } = state.mapHover;
-    ctx.strokeStyle = rule; ctx.lineWidth = 1; ctx.setLineDash([2, 3]);
-    ctx.beginPath();
-    ctx.moveTo(g.X(x), g.Y(0)); ctx.lineTo(g.X(x), g.Y(MODULE.L));
-    ctx.moveTo(g.X(0), g.Y(y)); ctx.lineTo(g.X(MODULE.W), g.Y(y));
-    ctx.stroke(); ctx.setLineDash([]);
-  }
-}
-
-// Loci |r - s_i| - |r - s_ref| = v (t_i - t_ref) for the earliest-arrival reference sensor,
-// traced with marching squares on a coarse grid.
-function drawHyperbolae(ctx, g, d) {
-  const t = picks(d), S = d.module.sensors;
-  const valid = t.map(isNum);
-  if (valid.filter(Boolean).length < 2) return;
-  let ref = -1;
-  t.forEach((v, i) => { if (valid[i] && (ref < 0 || v < t[ref])) ref = i; });
-  const v = d.run.s0_velocity_m_s * 1e-3;
-  const step = 3;
-  const nx = Math.ceil(g.pw / step) + 1, ny = Math.ceil(g.ph / step) + 1;
-  ctx.lineWidth = 1;
-  ctx.globalAlpha = 0.75;
-  for (let i = 0; i < S.length; i++) {
-    if (i === ref || !valid[i]) continue;
-    const dd = v * (t[i] - t[ref]);
-    const f = new Float64Array(nx * ny);
-    for (let jy = 0; jy < ny; jy++) {
-      const y = g.invY(MAP_M.t + jy * step);
-      for (let jx = 0; jx < nx; jx++) {
-        const x = g.invX(MAP_M.l + jx * step);
-        f[jy * nx + jx] = Math.hypot(x - S[i].x_mm, y - S[i].y_mm) - Math.hypot(x - S[ref].x_mm, y - S[ref].y_mm) - dd;
+    ["dragleave", "drop"].forEach(name => {
+      dropzone.addEventListener(name, (e) => { e.preventDefault(); dropzone.classList.remove("dragover"); });
+    });
+    dropzone.addEventListener("drop", (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files.length) {
+        document.getElementById("fileInput").files = files;
+        handleFileUpload({ target: { files: files } });
       }
-    }
-    ctx.strokeStyle = chColor(i);
-    ctx.beginPath();
-    for (let jy = 0; jy < ny - 1; jy++) {
-      for (let jx = 0; jx < nx - 1; jx++) {
-        const a = f[jy * nx + jx], b = f[jy * nx + jx + 1], c = f[(jy + 1) * nx + jx + 1], e = f[(jy + 1) * nx + jx];
-        const pts = [];
-        const px = MAP_M.l + jx * step, py = MAP_M.t + jy * step;
-        if ((a > 0) !== (b > 0)) pts.push([px + step * a / (a - b), py]);
-        if ((b > 0) !== (c > 0)) pts.push([px + step, py + step * b / (b - c)]);
-        if ((e > 0) !== (c > 0)) pts.push([px + step * e / (e - c), py + step]);
-        if ((a > 0) !== (e > 0)) pts.push([px, py + step * a / (a - e)]);
-        if (pts.length >= 2) { ctx.moveTo(...pts[0]); ctx.lineTo(...pts[1]); }
-        if (pts.length === 4) { ctx.moveTo(...pts[2]); ctx.lineTo(...pts[3]); }
-      }
-    }
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-}
+    });
 
-const mapCanvas = $("#map");
-mapCanvas.addEventListener("mousemove", e => {
-  const g = mapGeometry(), r = mapCanvas.getBoundingClientRect();
-  const x = g.invX(e.clientX - r.left), y = g.invY(e.clientY - r.top);
-  if (x < 0 || x > MODULE.W || y < 0 || y > MODULE.L) { state.mapHover = null; drawMap(); return; }
-  state.mapHover = { x, y };
-  const col = Math.min(MODULE.cols - 1, Math.floor(x / MODULE.W * MODULE.cols));
-  const row = Math.min(MODULE.rows - 1, Math.floor(y / MODULE.L * MODULE.rows));
-  $("#readout").textContent = `module  x = ${x.toFixed(0)} mm   y = ${y.toFixed(0)} mm   cell R${row + 1} C${col + 1}   — click to run a source here`;
-  drawMap();
-});
-mapCanvas.addEventListener("mouseleave", () => { state.mapHover = null; drawMap(); updateReadout(); });
-mapCanvas.addEventListener("click", e => {
-  const g = mapGeometry(), r = mapCanvas.getBoundingClientRect();
-  const x = g.invX(e.clientX - r.left), y = g.invY(e.clientY - r.top);
-  if (x < 0 || x > MODULE.W || y < 0 || y > MODULE.L) return;
-  inputs.x.value = Math.round(x);
-  inputs.y.value = Math.round(y);
-  state.caseId = null;
-  renderCases();
-  run();
-});
-
-/* ------------------------------------------------------------------ Fig. 1b: sensor records */
-const SC_M = { l: 64, r: 14, t: 22, b: 34 };
-function scopeGeometry() {
-  const width = $("#scopeWrap").clientWidth;
-  const height = Math.max(380, mapGeometry().height);
-  const pw = width - SC_M.l - SC_M.r, ph = height - SC_M.t - SC_M.b;
-  const [t0, t1] = timeWindow();
-  return { width, height, pw, ph, laneH: ph / 4, t0, t1,
-    X: t => SC_M.l + (t - t0) / (t1 - t0) * pw, invX: px => t0 + (px - SC_M.l) / pw * (t1 - t0) };
-}
-
-function drawScope() {
-  const cv = $("#scope");
-  const g = scopeGeometry();
-  const ctx = prepCanvas(cv, g.width, g.height);
-  const ink = cssVar("--ink"), ink2 = cssVar("--ink-2"), ink3 = cssVar("--ink-3");
-  const grid = cssVar("--grid"), rule = cssVar("--rule-strong");
-  ctx.fillStyle = cssVar("--plot-bg");
-  ctx.fillRect(SC_M.l, SC_M.t, g.pw, g.ph);
-
-  const d = state.data;
-  const xt = ticks(g.t0, g.t1, Math.max(3, Math.floor(g.pw / 80)));
-  ctx.strokeStyle = grid; ctx.lineWidth = 1;
-  ctx.beginPath();
-  xt.forEach(t => { const x = Math.round(g.X(t)) + .5; ctx.moveTo(x, SC_M.t); ctx.lineTo(x, SC_M.t + g.ph); });
-  ctx.stroke();
-
-  if (!d) {
-    ctx.fillStyle = ink3; ctx.textAlign = "center";
-    ctx.fillText("No record. Run an event.", SC_M.l + g.pw / 2, SC_M.t + g.ph / 2);
-  }
-
-  const S = d ? d.oscilloscope.samples_mv : null;
-  const dt = d ? 1e6 / d.run.sample_rate_hz : 1;
-  const i0 = Math.max(0, Math.floor(g.t0 / dt)), i1 = d ? Math.min(S[0].length, Math.ceil(g.t1 / dt) + 1) : 0;
-  const peaks = S ? S.map(ch => { let p = 0; for (let i = i0; i < i1; i++) { const a = Math.abs(ch[i]); if (a > p) p = a; } return p; }) : [1, 1, 1, 1];
-  const common = niceCeil(Math.max(...peaks) * 1.05);
-  const tPick = d ? picks(d) : [], tPred = d ? predictedArrivals(d) : [];
-  const sens = sensors();
-
-  for (let ch = 0; ch < 4; ch++) {
-    const top = SC_M.t + ch * g.laneH, mid = top + g.laneH / 2, half = g.laneH / 2 - 7;
-    const full = state.scale === "common" ? common : niceCeil(peaks[ch] * 1.05);
-    const Y = v => mid - v / full * half;
-
-    // lane frame, zero line, half-scale lines
-    ctx.strokeStyle = grid; ctx.beginPath();
-    [-0.5, 0.5].forEach(k => { const y = Math.round(Y(k * full)) + .5; ctx.moveTo(SC_M.l, y); ctx.lineTo(SC_M.l + g.pw, y); });
-    ctx.stroke();
-    ctx.strokeStyle = rule; ctx.beginPath();
-    ctx.moveTo(SC_M.l, Math.round(mid) + .5); ctx.lineTo(SC_M.l + g.pw, Math.round(mid) + .5);
-    if (ch > 0) { ctx.moveTo(SC_M.l, Math.round(top) + .5); ctx.lineTo(SC_M.l + g.pw, Math.round(top) + .5); }
-    ctx.stroke();
-
-    // y labels: lanes are symmetric, so only the positive full scale is written
-    ctx.fillStyle = ink3; ctx.textAlign = "right";
-    ctx.fillText("±" + tickLabel(full), SC_M.l - 6, Y(full) + 2);
-    ctx.fillText("0", SC_M.l - 6, mid);
-    ctx.fillStyle = chColor(ch); ctx.textAlign = "left";
-    ctx.fillText(`CH${ch + 1}`, 6, mid + 14);
-    ctx.fillStyle = ink3;
-    ctx.fillText(sens[ch] ? sens[ch].name : "", 6, mid + 27);
-
-    if (!S) continue;
-    const x = S[ch];
-    ctx.save();
-    ctx.beginPath(); ctx.rect(SC_M.l, top + 1, g.pw, g.laneH - 2); ctx.clip();
-
-    // markers under the trace
-    if (isNum(tPred[ch])) {
-      ctx.strokeStyle = ink2; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
-      const px = Math.round(g.X(tPred[ch])) + .5;
-      ctx.beginPath(); ctx.moveTo(px, top + 3); ctx.lineTo(px, top + g.laneH - 3); ctx.stroke();
-      ctx.setLineDash([]);
+    // Logging & History Table
+    function logInspection(entry) {
+      entry.time = new Date().toLocaleTimeString();
+      inspectionHistory.unshift(entry);
+      renderHistoryTable();
     }
 
-    // trace: polyline when zoomed in, min/max envelope per pixel column otherwise
-    ctx.strokeStyle = chColor(ch); ctx.lineWidth = 1.1;
-    ctx.beginPath();
-    const spp = (g.t1 - g.t0) / dt / g.pw;
-    if (spp <= 1.5) {
-      for (let i = i0; i < i1; i++) {
-        const px = g.X(i * dt), py = Y(x[i]);
-        if (i === i0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      }
-    } else {
-      for (let c = 0; c < g.pw; c++) {
-        const a = Math.max(i0, Math.floor((g.t0 + c / g.pw * (g.t1 - g.t0)) / dt));
-        const b = Math.min(i1, Math.max(a + 1, Math.floor((g.t0 + (c + 1) / g.pw * (g.t1 - g.t0)) / dt)));
-        let lo = Infinity, hi = -Infinity;
-        for (let i = a; i < b; i++) { if (x[i] < lo) lo = x[i]; if (x[i] > hi) hi = x[i]; }
-        if (!isFinite(lo)) continue;
-        const px = SC_M.l + c + .5;
-        if (c === 0) ctx.moveTo(px, Y(hi)); else ctx.lineTo(px, Y(hi));
-        ctx.lineTo(px, Y(lo));
-      }
+    function renderHistoryTable() {
+      const tbody = document.getElementById("historyTableBody");
+      tbody.innerHTML = "";
+      inspectionHistory.forEach(item => {
+        const isDefect = item.verdict.includes("CRACK") || item.verdict.includes("DEFECT");
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td class="text-mono">${item.time}</td>
+          <td>${item.method}</td>
+          <td class="text-mono">${item.source}</td>
+          <td><span class="${isDefect ? 'badge-defect' : 'badge-pass'}">${item.verdict}</span></td>
+          <td>${item.classification}</td>
+          <td class="text-mono">${item.confidence}</td>
+          <td class="text-mono">${item.metric}</td>
+        `;
+        tbody.appendChild(row);
+      });
     }
-    ctx.stroke();
 
-    if (isNum(tPick[ch])) {
-      ctx.strokeStyle = ink; ctx.lineWidth = 1.2;
-      const px = Math.round(g.X(tPick[ch])) + .5;
-      ctx.beginPath(); ctx.moveTo(px, top + 3); ctx.lineTo(px, top + g.laneH - 3); ctx.stroke();
-      ctx.fillStyle = ink2; ctx.textAlign = "left";
-      ctx.fillText(tPick[ch].toFixed(1), px + 4, top + 9);
+    function clearInspectionLog() {
+      inspectionHistory.length = 0;
+      renderHistoryTable();
     }
-    ctx.restore();
-  }
 
-  // emission time t0 across all lanes
-  if (d && d.run.source_onset_us >= g.t0 && d.run.source_onset_us <= g.t1) {
-    const px = Math.round(g.X(d.run.source_onset_us)) + .5;
-    ctx.strokeStyle = ink3; ctx.setLineDash([1, 3]); ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(px, SC_M.t); ctx.lineTo(px, SC_M.t + g.ph); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = ink3; ctx.textAlign = "left";
-    ctx.fillText("t₀", px + 3, SC_M.t + g.ph - 8);
-  }
-
-  // plot frame and time axis
-  ctx.strokeStyle = ink2; ctx.lineWidth = 1;
-  ctx.strokeRect(SC_M.l + .5, SC_M.t + .5, Math.round(g.pw), Math.round(g.ph));
-  ctx.fillStyle = ink3; ctx.strokeStyle = ink3; ctx.textAlign = "center";
-  xt.forEach(t => {
-    const x = g.X(t);
-    ctx.beginPath(); ctx.moveTo(x, SC_M.t + g.ph); ctx.lineTo(x, SC_M.t + g.ph + 4); ctx.stroke();
-    ctx.fillText(tickLabel(t), x, SC_M.t + g.ph + 12);
-  });
-  ctx.fillText("time from record start (µs)", SC_M.l + g.pw / 2, g.height - 9);
-  ctx.textAlign = "right";
-  ctx.fillText(state.scale === "common" ? "mV, common scale" : "mV, per channel", SC_M.l + g.pw, 10);
-  ctx.textAlign = "left";
-  ctx.fillText("mV", SC_M.l - 30, 10);
-
-  // drag band and cursor
-  if (state.drag) {
-    const a = Math.min(state.drag.x0, state.drag.x1), b = Math.max(state.drag.x0, state.drag.x1);
-    ctx.fillStyle = cssVar("--accent-soft"); ctx.globalAlpha = 0.6;
-    ctx.fillRect(a, SC_M.t, b - a, g.ph); ctx.globalAlpha = 1;
-  }
-  if (isNum(state.hoverT) && d) {
-    const px = Math.round(g.X(state.hoverT)) + .5;
-    ctx.strokeStyle = ink2; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(px, SC_M.t); ctx.lineTo(px, SC_M.t + g.ph); ctx.stroke();
-  }
-}
-
-function updateReadout() {
-  const el = $("#readout");
-  const d = state.data;
-  if (!d) { el.textContent = "Drag across the records to zoom, double-click to reset. Hover for values."; return; }
-  const [t0, t1] = timeWindow();
-  const head = `window ${t0.toFixed(0)}–${t1.toFixed(0)} µs`;
-  if (!isNum(state.hoverT)) { el.innerHTML = `${head}   ·   drag to zoom, double-click to reset`; return; }
-  const dt = 1e6 / d.run.sample_rate_hz;
-  const i = Math.round(state.hoverT / dt);
-  const vals = d.oscilloscope.samples_mv.map((ch, k) => `<span class="c${k + 1}">CH${k + 1} ${signed(ch[i], 2)}</span>`).join("  ");
-  el.innerHTML = `t = ${(i * dt).toFixed(0)} µs   ${vals}  mV`;
-}
-
-const scopeCanvas = $("#scope");
-const scopeX = e => e.clientX - scopeCanvas.getBoundingClientRect().left;
-scopeCanvas.addEventListener("mousedown", e => {
-  if (!state.data) return;
-  state.drag = { x0: scopeX(e), x1: scopeX(e) };
-});
-scopeCanvas.addEventListener("mousemove", e => {
-  const g = scopeGeometry(), x = scopeX(e);
-  if (state.drag) state.drag.x1 = x;
-  state.hoverT = x >= SC_M.l && x <= SC_M.l + g.pw ? g.invX(x) : null;
-  drawScope(); updateReadout();
-});
-scopeCanvas.addEventListener("mouseleave", () => { state.hoverT = null; state.drag = null; drawScope(); updateReadout(); });
-window.addEventListener("mouseup", () => {
-  if (!state.drag) return;
-  const g = scopeGeometry();
-  const a = Math.min(state.drag.x0, state.drag.x1), b = Math.max(state.drag.x0, state.drag.x1);
-  state.drag = null;
-  if (b - a > 6) {
-    const n = state.data.oscilloscope.samples_mv[0].length;
-    state.zoom = [Math.max(0, g.invX(a)), Math.min(n, g.invX(b))];
-  }
-  drawScope(); updateReadout();
-});
-scopeCanvas.addEventListener("dblclick", () => { state.zoom = null; drawScope(); updateReadout(); });
-
-function bindSeg(id, attr, apply) {
-  const seg = $(id);
-  seg.addEventListener("click", e => {
-    const b = e.target.closest("button");
-    if (!b) return;
-    $$("button", seg).forEach(x => x.setAttribute("aria-pressed", String(x === b)));
-    apply(b.dataset[attr]);
-  });
-}
-bindSeg("#winSeg", "win", v => { state.win = v; state.zoom = null; drawScope(); updateReadout(); });
-bindSeg("#scaleSeg", "scale", v => { state.scale = v; drawScope(); });
-bindSeg("#specSeg", "ch", v => { state.specCh = +v; drawSpectrum(); });
-
-/* ------------------------------------------------------------------ Fig. 2: spectrum */
-const SP_M = { l: 46, r: 14, t: 12, b: 34 };
-function spectrumChannel(d) {
-  if (state.specCh !== null) return state.specCh;
-  const t = picks(d);
-  let best = 0;
-  t.forEach((v, i) => { if (isNum(v) && (!isNum(t[best]) || v < t[best])) best = i; });
-  return best;
-}
-function drawSpectrum() {
-  const cv = $("#spec");
-  const width = $("#specWrap").clientWidth, height = 230;
-  const ctx = prepCanvas(cv, width, height);
-  const pw = width - SP_M.l - SP_M.r, ph = height - SP_M.t - SP_M.b;
-  const ink2 = cssVar("--ink-2"), ink3 = cssVar("--ink-3"), grid = cssVar("--grid");
-  const fMax = 500, dbMin = -60;
-  const X = f => SP_M.l + f / fMax * pw, Y = db => SP_M.t + (0 - db) / (0 - dbMin) * ph;
-  ctx.fillStyle = cssVar("--plot-bg"); ctx.fillRect(SP_M.l, SP_M.t, pw, ph);
-
-  const fT = ticks(0, fMax, 5), dT = ticks(dbMin, 0, 6);
-  ctx.strokeStyle = grid; ctx.beginPath();
-  fT.forEach(f => { const x = Math.round(X(f)) + .5; ctx.moveTo(x, SP_M.t); ctx.lineTo(x, SP_M.t + ph); });
-  dT.forEach(v => { const y = Math.round(Y(v)) + .5; ctx.moveTo(SP_M.l, y); ctx.lineTo(SP_M.l + pw, y); });
-  ctx.stroke();
-
-  const d = state.data;
-  $$("#specSeg button").forEach(b => b.setAttribute("aria-pressed", String(d && +b.dataset.ch === spectrumChannel(d))));
-  if (d) {
-    const ch = spectrumChannel(d);
-    const x = d.oscilloscope.samples_mv[ch];
-    // 256-sample windows (256 µs): long enough for the direct S0/A0 packet, short enough
-    // that the record is not dominated by noise; zero-padded to 1024 for a smooth curve.
-    const fs = d.run.sample_rate_hz, nfft = 1024, win = 256;
-    const tp = picks(d)[ch];
-    const start = Math.max(0, Math.min(x.length - win, Math.round(isNum(tp) ? tp - 16 : d.run.source_onset_us)));
-    const sig = psd(x, start, win, nfft);
-    const noiseEnd = Math.floor(d.run.source_onset_us * fs / 1e6) - 16;
-    const noise = psd(x, Math.max(0, noiseEnd - win), Math.min(win, noiseEnd), nfft);
-    const ref = Math.max(...sig) || 1;
-    const df = fs / nfft / 1e3;  // kHz per bin
-    const toDb = p => Math.max(dbMin, 10 * Math.log10(p / ref + 1e-30));
-
-    const line = (arr, color, w) => {
-      ctx.strokeStyle = color; ctx.lineWidth = w; ctx.beginPath();
-      for (let k = 0; k * df <= fMax && k < arr.length; k++) {
-        const px = X(k * df), py = Y(toDb(arr[k]));
-        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-    };
-    ctx.save(); ctx.beginPath(); ctx.rect(SP_M.l, SP_M.t, pw, ph); ctx.clip();
-    line(noise, ink3, 1);
-    line(sig, chColor(ch), 1.3);
-
-    // spectral centroid and peak over 20–500 kHz
-    let num = 0, den = 0, kPeak = 0;
-    for (let k = Math.ceil(20 / df); k * df <= fMax; k++) {
-      num += k * df * sig[k]; den += sig[k];
-      if (sig[k] > sig[kPeak]) kPeak = k;
-    }
-    const fc = den > 0 ? num / den : NaN, fp = kPeak * df;
-    ctx.strokeStyle = ink2; ctx.lineWidth = 1;
-    ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(X(fc), SP_M.t); ctx.lineTo(X(fc), SP_M.t + ph); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-    // legend box, top right
-    const lx = SP_M.l + pw - 8;
-    ctx.fillStyle = cssVar("--plot-bg"); ctx.globalAlpha = 0.88;
-    ctx.fillRect(lx - 168, SP_M.t + 2, 172, 58); ctx.globalAlpha = 1;
-    ctx.textAlign = "right";
-    ctx.fillStyle = chColor(ch); ctx.fillText(`CH${ch + 1} signal`, lx, SP_M.t + 10);
-    ctx.fillStyle = ink3; ctx.fillText("pre-event noise", lx, SP_M.t + 24);
-    ctx.fillStyle = ink2; ctx.fillText(`centroid ${fc.toFixed(0)} kHz (dashed)`, lx, SP_M.t + 38);
-    ctx.fillStyle = ink3; ctx.fillText(`peak ${fp.toFixed(0)} kHz`, lx, SP_M.t + 52);
-
-    let snr = NaN;
-    { let ps = 0, pn = 0; for (let k = Math.ceil(50 / df); k * df <= 400; k++) { ps += sig[k]; pn += noise[k]; } snr = 10 * Math.log10(ps / (pn || 1e-30)); }
-    $("#specCap").innerHTML = `<b>Fig. 2</b> CH${ch + 1}: power spectral density of 256 samples from ${start} µs (Hann, zero-padded to 1024) and of the same length of pre-event noise, dB re signal maximum. ` +
-      `Band power ratio 50–400 kHz: ${fmt(snr, 1)} dB. Spectral centroid ${fmt(fc, 0)} kHz.`;
-  }
-
-  ctx.strokeStyle = ink2; ctx.lineWidth = 1;
-  ctx.strokeRect(SP_M.l + .5, SP_M.t + .5, Math.round(pw), Math.round(ph));
-  ctx.fillStyle = ink3; ctx.textAlign = "center";
-  fT.forEach(f => ctx.fillText(tickLabel(f), X(f), SP_M.t + ph + 12));
-  ctx.fillText("frequency (kHz)", SP_M.l + pw / 2, height - 9);
-  ctx.textAlign = "right";
-  dT.forEach(v => ctx.fillText(String(v), SP_M.l - 6, Y(v)));
-  ctx.save(); ctx.translate(11, SP_M.t + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = "center";
-  ctx.fillText("dB", 0, 0); ctx.restore();
-}
-
-/* ------------------------------------------------------------------ tables */
-function row(label, value, cls = "num") { return `<tr><td>${label}</td><td class="${cls}">${value}</td></tr>`; }
-const shortCell = id => String(id).replace("Cell ", "").replace(/[(),]/g, "");
-const sci = v => (!isNum(v) ? "—" : Math.abs(v) >= 1e4 || (Math.abs(v) < 1e-2 && v !== 0) ? v.toExponential(2) : v.toFixed(2));
-
-function renderResults() {
-  const d = state.data;
-  if (!d) return;
-  const gt = d.ground_truth, rc = d.reconstruction, ml = d.ml_inference, ft = d.features, run = d.run;
-
-  // decision
-  const dec = $("#decision");
-  const p = ml.crack_probability / 100;
-  if (ml.is_crack_pred === -1) {
-    dec.className = "decision";
-    $("#verdict").textContent = "Model unavailable";
-    $("#verdictSub").textContent = ml.model_name;
-  } else {
-    const alarm = ml.is_crack_pred === 1;
-    dec.className = "decision " + (alarm ? "alarm" : "clear");
-    $("#verdict").textContent = alarm ? "New fracture" : "No new fracture";
-    const truthAlarm = gt.is_crack === 1;
-    const agrees = truthAlarm === alarm;
-    $("#verdictSub").innerHTML = `Simulated source: ${esc(SOURCE_NAMES[gt.source_type] || gt.source_type)} · ` +
-      `<span class="${agrees ? "ok-t" : "bad-t"}">${agrees ? "decision agrees with ground truth" : "decision disagrees with ground truth"}</span>`;
-  }
-  $("#pfill").style.width = (p * 100).toFixed(1) + "%";
-  $("#pthr").style.left = ((ml.decision_threshold || 0.5) * 100) + "%";
-  $("#pval").textContent = `${p.toFixed(3)} (threshold ${(ml.decision_threshold || 0.5).toFixed(2)})`;
-
-  // posterior
-  const probs = Object.entries(ml.class_probabilities || {}).sort((a, b) => b[1] - a[1]);
-  const nf = new Set(ml.new_fracture_classes || []);
-  $("#post tbody").innerHTML = probs.length ? probs.map(([c, v]) => `
-    <tr class="${c === ml.predicted_source ? "pred" : ""}">
-      <td class="name">${esc(CLASS_NAMES[c] || c)}${nf.has(c) ? '<span class="nf">NF</span>' : ""}${c === gt.event_class ? ' <span class="tag true">true</span>' : ""}</td>
-      <td class="bar"><div class="b" style="width:${Math.max(0.4, v * 100).toFixed(1)}%"></div></td>
-      <td class="num">${v.toFixed(3)}</td>
-    </tr>`).join("") : `<tr><td class="muted">No posterior (model not loaded).</td></tr>`;
-
-  // localisation
-  const located = isNum(rc.x_mm);
-  $("#locTable tbody").innerHTML =
-    row("Source (true)", `(${fmt(gt.x_mm, 0)}, ${fmt(gt.y_mm, 0)}) mm`) +
-    row("Estimate", located ? `(${fmt(rc.x_mm, 1)}, ${fmt(rc.y_mm, 1)}) mm` : "not located") +
-    row("Position error", located ? `${fmt(rc.error_mm, 1)} mm` : "—") +
-    row("2σ ellipse a × b", located ? `${fmt(rc.uncertainty_semi_major_mm, 1)} × ${fmt(rc.uncertainty_semi_minor_mm, 1)} mm` : "—") +
-    row("Ellipse orientation", located && isNum(rc.uncertainty_angle_deg) ? `${fmt(rc.uncertainty_angle_deg, 0)}°` : "—") +
-    row("Residual RMS", isNum(rc.residual_rms_us) ? `${fmt(rc.residual_rms_us, 2)} µs` : "—") +
-    row("Sensors used", `${rc.sensors_used} / 4`) +
-    row("Cell, true → est.", `${shortCell(gt.cell_id)} → ${shortCell(rc.cell_id)} ` +
-      `<span class="${rc.cell_matched ? "ok-t" : "warn-t"}">${rc.cell_matched ? "match" : "miss"}</span>`);
-
-  // features
-  $("#featTable tbody").innerHTML =
-    row("Peak amplitude", `${fmt(ft.peak_amp_mv, 1)} mV`) +
-    row("Rise time", `${fmt(ft.rise_time_us, 1)} µs`) +
-    row("Duration", `${fmt(ft.duration_us, 0)} µs`) +
-    row("Threshold counts", isNum(ft.counts) ? String(ft.counts) : "—") +
-    row("Energy", `${sci(ft.energy_au)} a.u.`) +
-    row("Centroid / peak frequency", `${fmt(ft.centroid_khz, 0)} / ${fmt(ft.peak_freq_khz, 0)} kHz`);
-
-  // run
-  $("#runTable tbody").innerHTML =
-    row("Seed", String(run.seed)) +
-    row("Temperature", `${fmt(run.temperature_c, 0)} °C`) +
-    row("S0 velocity used", `${fmt(run.s0_velocity_m_s, 0)} m/s`) +
-    row("Source energy", `${fmt(run.energy, 2)} a.u.`) +
-    row("DAQ", `${(run.sample_rate_hz / 1e6).toFixed(1)} MS/s, ${run.adc_bits}-bit`) +
-    row("Triggered", run.triggered ? "yes" : '<span class="warn-t">no</span>', "");
-  $("#vS0").textContent = `v_S0 = ${fmt(run.s0_velocity_m_s, 0)} m/s at ${fmt(run.temperature_c, 0)} °C`;
-  ["#exportJson", "#exportCsv", "#copyLink"].forEach(s => { $(s).disabled = false; });
-
-  // picks
-  const tp = picks(d), tq = predictedArrivals(d);
-  const S = d.oscilloscope.samples_mv;
-  $("#picks tbody").innerHTML = d.module.sensors.map((s, i) => {
-    const r = Math.hypot(s.x_mm - gt.x_mm, s.y_mm - gt.y_mm);
-    const vmax = S[i].reduce((m, v) => Math.max(m, Math.abs(v)), 0);
-    const delta = isNum(tp[i]) ? tp[i] - tq[i] : null;
-    return `<tr><td style="white-space:nowrap"><span style="color:var(--ch${i + 1})">■</span> CH${i + 1}/${esc(s.name)}</td>
-      <td class="num">${r.toFixed(0)}</td><td class="num">${fmt(tp[i], 1)}</td><td class="num">${tq[i].toFixed(1)}</td>
-      <td class="num">${signed(delta, 1)}</td><td class="num">${vmax.toFixed(1)}</td></tr>`;
-  }).join("");
-}
-
-/* ------------------------------------------------------------------ run log */
-function addLog(p, d) {
-  state.log.unshift({ n: state.log.length + 1, params: { ...p, seed: d.run.seed }, data: d, time: new Date() });
-  if (state.log.length > 60) state.log.pop();
-  state.selectedLog = 0;
-  renderLog();
-}
-function renderLog() {
-  $("#logCount").textContent = `${state.log.length} run${state.log.length === 1 ? "" : "s"}`;
-  if (!state.log.length) { $("#log").innerHTML = '<p class="empty">No runs yet.</p>'; return; }
-  $("#log").innerHTML = `<table><thead><tr><th>#</th><th>Source</th><th class="num">P(NF)</th><th class="num">Δr mm</th></tr></thead><tbody>` +
-    state.log.map((e, k) => {
-      const ml = e.data.ml_inference, gt = e.data.ground_truth;
-      const wrong = ml.is_crack_pred !== -1 && (ml.is_crack_pred === 1) !== (gt.is_crack === 1);
-      return `<tr data-k="${k}" class="${k === state.selectedLog ? "sel" : ""}">
-        <td class="num">${e.n}</td><td>${esc(SOURCE_NAMES[gt.source_type] || gt.source_type)}</td>
-        <td class="num ${wrong ? "bad-t" : ""}">${(ml.crack_probability / 100).toFixed(3)}</td>
-        <td class="num">${fmt(e.data.reconstruction.error_mm, 1)}</td></tr>`;
-    }).join("") + "</tbody></table>";
-  $$("#log tbody tr").forEach(tr => tr.addEventListener("click", () => {
-    const e = state.log[+tr.dataset.k];
-    state.selectedLog = +tr.dataset.k;
-    state.data = e.data; state.zoom = null; state.specCh = null;
-    writeForm(e.params);
-    renderLog(); render();
-  }));
-}
-$("#logCsv").addEventListener("click", () => {
-  if (!state.log.length) return;
-  const head = "run,source_type,x_mm,y_mm,energy,temperature_c,seed,true_class,predicted_class,p_new_fracture,decision,error_mm,cell_match";
-  const lines = state.log.slice().reverse().map(e => {
-    const d = e.data, p = e.params;
-    return [e.n, p.source_type, p.x_mm, p.y_mm, p.energy, p.temperature_c, d.run.seed, d.ground_truth.event_class,
-      d.ml_inference.predicted_source, (d.ml_inference.crack_probability / 100).toFixed(4), d.ml_inference.is_crack_pred,
-      d.reconstruction.error_mm ?? "", d.reconstruction.cell_matched].join(",");
-  });
-  download("acoustisolar_run_log.csv", [head, ...lines].join("\n"), "text/csv");
-});
-
-/* ------------------------------------------------------------------ export / permalink */
-function download(name, text, type) {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: name });
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-$("#exportJson").addEventListener("click", () => {
-  const d = state.data; if (!d) return;
-  download(`acoustisolar_${d.run.source_type}_seed${d.run.seed}.json`, JSON.stringify(d, null, 1), "application/json");
-});
-$("#exportCsv").addEventListener("click", () => {
-  const d = state.data; if (!d) return;
-  const S = d.oscilloscope.samples_mv, dt = 1e6 / d.run.sample_rate_hz;
-  const lines = ["t_us,ch1_mV,ch2_mV,ch3_mV,ch4_mV"];
-  for (let i = 0; i < S[0].length; i++) lines.push([(i * dt).toFixed(1), S[0][i], S[1][i], S[2][i], S[3][i]].join(","));
-  download(`acoustisolar_${d.run.source_type}_seed${d.run.seed}.csv`, lines.join("\n"), "text/csv");
-});
-function updateHash(d) {
-  const gt = d.ground_truth, r = d.run;
-  const h = `#type=${gt.source_type}&x=${gt.x_mm}&y=${gt.y_mm}&E=${r.energy}&T=${r.temperature_c}&seed=${r.seed}`;
-  history.replaceState(null, "", h);
-}
-$("#copyLink").addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText(location.href); $("#copyLink").textContent = "Copied"; }
-  catch (e) { $("#copyLink").textContent = "Copy failed"; }
-  setTimeout(() => { $("#copyLink").textContent = "Copy link"; }, 1400);
-});
-function paramsFromHash() {
-  if (!location.hash) return null;
-  const q = new URLSearchParams(location.hash.slice(1));
-  if (!q.has("type")) return null;
-  return { source_type: q.get("type"), x_mm: +q.get("x"), y_mm: +q.get("y"), energy: +(q.get("E") || 2),
-    temperature_c: +(q.get("T") || 25), seed: q.has("seed") ? +q.get("seed") : null };
-}
-
-/* ------------------------------------------------------------------ validation record */
-const pct = v => (isNum(v) ? (v * 100).toFixed(1) + " %" : "—");
-const metStatus = ok => (ok === true ? '<span class="ok-t">met</span>' : ok === false ? '<span class="bad-t">not met</span>' : "—");
-const pass = s => (s === "PASS" ? '<span class="ok-t">pass</span>' : `<span class="bad-t">${esc(s || "—")}</span>`);
-
-function renderValidation(v) {
-  const k = v.kpi_benchmark;
-  if (k) {
-    const t = k.targets, st = k.target_status, fm = k.feature_model, nd = k.new_fracture_detection, lo = k.localization_tier0_heldout;
-    $("#benchMeta").textContent = `${k.dataset.n_test} test events · ${k.dataset.test_modules.join(", ")}`;
-    $("#benchTable tbody").innerHTML = `<tr><th>Quantity</th><th class="num">Target</th><th class="num">Achieved</th><th>Status</th></tr>` + [
-      ["Macro-F1, 10 classes (feature model)", t.macro_f1.toFixed(2), `${fm.macro_f1.toFixed(3)} <span class="muted">[${fm.macro_f1_95ci.map(x => x.toFixed(2)).join(", ")}]</span>`, st.macro_f1],
-      ["Macro-F1, ensemble with 1D CNN", t.macro_f1.toFixed(2), k.deep_model && isNum(k.deep_model.ensemble_macro_f1) ? k.deep_model.ensemble_macro_f1.toFixed(3) : "—", k.deep_model && k.deep_model.ensemble_macro_f1 >= t.macro_f1],
-      ["Crack recall at ≤ 1 false alarm / module-day", t.recall_at_1_far.toFixed(2), nd.recall_at_1_far_per_module_day.toFixed(2), st.recall_at_1_far],
-      ["Localisation error, median", `${t.loc_median_mm} mm`, `${lo.median_error_mm.toFixed(1)} mm`, st.loc_median_mm],
-      ["Localisation error, 90th percentile", `${t.loc_p90_mm} mm`, `${lo.p90_error_mm.toFixed(0)} mm`, st.loc_p90_mm],
-      ["Cell identification accuracy", pct(t.cell_id_accuracy), pct(lo.cell_id_accuracy), st.cell_id_accuracy],
-      ["Expected calibration error (top label)", t.ece.toFixed(2), fm.ece_top_label.toFixed(3), st.ece],
-    ].map(r => `<tr><td>${r[0]}</td><td class="num">${r[1]}</td><td class="num">${r[2]}</td><td>${metStatus(r[3])}</td></tr>`).join("");
-    const byMod = lo.by_module ? Object.entries(lo.by_module).map(([m, x]) => `${m}: median ${x.median_error_mm.toFixed(1)} mm`).join("; ") : "";
-    $("#benchNote").textContent = `Trained on ${k.dataset.train_modules.join(", ")}; tested on module designs never seen in training. ${byMod}. ` +
-      `Generated ${k.generated_utc}. ${k.caveat || ""}`;
-
-    const cls = fm.classes || Object.keys(fm.per_class_f1);
-    $("#classTable tbody").innerHTML = `<tr><th>Class</th><th class="num">Test events</th><th class="num">Trigger rate</th><th class="num">F1 trees</th><th class="num">F1 CNN</th></tr>` +
-      cls.map(c => `<tr><td>${esc(CLASS_NAMES[c] || c)}</td><td class="num">${k.dataset.class_counts_test[c] ?? "—"}</td>
-        <td class="num">${pct(k.dataset.trigger_rate_by_class_test[c])}</td>
-        <td class="num">${fmt(fm.per_class_f1[c], 2)}</td>
-        <td class="num">${k.deep_model && k.deep_model.per_class_f1 ? fmt(k.deep_model.per_class_f1[c], 2) : "—"}</td></tr>`).join("");
-
-    const os = k.open_set;
-    $("#detTable tbody").innerHTML = `<tr><th>Quantity</th><th class="num">Value</th></tr>` + [
-      ["PR-AUC, new fracture vs. rest", nd.pr_auc.toFixed(3)],
-      ["Precision / recall at P = 0.5", `${fmt(nd["precision_at_0.5"], 2)} / ${fmt(nd["recall_at_0.5"], 2)}`],
-      ["Crack events that trigger the DAQ", pct(nd.crack_trigger_rate)],
-      ["Conformal set coverage (target 0.90)", fmt(fm.conformal_coverage, 2)],
-      [`Open set: withheld "${esc(CLASS_NAMES[os.withheld_class] || os.withheld_class)}" flagged unknown`, pct(os.unknown_detection_rate_on_withheld)],
-      ["Open set: known events wrongly flagged unknown", pct(os.false_unknown_rate_on_known)],
-      ["Noise triggers per module-day (assumed, unsourced)", String(nd.noise_triggers_per_module_day_assumption)],
-    ].map(r => `<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`).join("");
-  } else {
-    $("#benchTable tbody").innerHTML = '<tr><td class="empty">kpi_benchmark_summary.json not found. Run validation/run_scale_kpi_benchmark.py.</td></tr>';
-  }
-
-  const vv = v.vv_suite;
-  if (vv) {
-    $("#vvMeta").textContent = `${vv.summary === "ALL_PASS" ? "all pass" : vv.summary} · ${vv.timestamp_utc}`;
-    const T = vv.tests, rows = [
-      ["Lamb solver vs independent reference", T.lamb_vs_independent_reference, x => `max error ${x.max_error_pct.toFixed(3)} %`, x => `≤ ${x.tolerance_pct} %`],
-      ["SAFE single layer vs exact Lamb", T.safe_single_layer_regression, x => `max error ${x.max_error_pct.toFixed(3)} %`, x => `≤ ${x.tolerance_pct} %`],
-      ["Laminate S0 velocity is physical", T.laminate_s0_physical, x => `${x.laminate_s0_m_s.toFixed(0)} m/s (${x.delta_pct.toFixed(2)} % vs glass)`, () => "within a few %"],
-      ["Tier-0 causality", T.tier0_causality, x => `pre-arrival energy ratio ${x.max_pre_arrival_ratio}`, () => "0"],
-      ["Tier-1 reciprocity (heterogeneous)", T.tier1_heterogeneous_reciprocity, x => `rel. L2 ${x.relative_l2_error.toExponential(1)}`, () => "≈ machine ε"],
-      ["Tier-1 grid convergence", T.tier1_grid_convergence, x => `order ${x.observed_order.toFixed(2)}`, x => `${x.expected_order.toFixed(1)}`],
-      ["Tier-0 vs Tier-1 arrival speed", T.tier0_tier1_arrival_agreement, x => `${x.speed_error_pct.toFixed(2)} %`, x => `≤ ${x.tolerance_pct} %`],
-    ].filter(r => r[1]);
-    $("#vvTable tbody").innerHTML = `<tr><th>Check</th><th>Result</th><th>Criterion</th><th>Status</th></tr>` +
-      rows.map(r => `<tr><td>${r[0]}</td><td class="mono">${r[2](r[1])}</td><td class="mono">${r[3](r[1])}</td><td>${pass(r[1].status)}</td></tr>`).join("");
-  } else {
-    $("#vvTable tbody").innerHTML = '<tr><td class="empty">vv_suite_results.json not found. Run the V&V suite.</td></tr>';
-  }
-
-  const rp = v.reproducibility;
-  $("#reproTable tbody").innerHTML = rp ? `<tr><th>Quantity</th><th>Value</th></tr>` + [
-    ["Status", pass(rp.status)],
-    ["Events regenerated twice", `${rp.n_events} (seed ${rp.seed})`],
-    ["Waveform bytes compared", rp.byte_length.toLocaleString("en")],
-    ["Bit-identical", rp.bit_identical ? '<span class="ok-t">yes</span>' : '<span class="bad-t">no</span>'],
-    ["SHA-256 (both runs)", `<span class="mono">${esc(rp.sha256_waveforms_run1.slice(0, 16))}…</span>`],
-    ["Config hash / code commit", `<span class="mono">${esc(rp.config_hash.slice(0, 12))} / ${esc(rp.code_git_sha.slice(0, 7))}</span>`],
-    ["Classifier file SHA-256", v.model_sha256 ? `<span class="mono">${esc(v.model_sha256.slice(0, 16))}…</span>` : "—"],
-  ].map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("") : '<tr><td class="empty">reproducibility_proof.json not found.</td></tr>';
-}
-
-/* ------------------------------------------------------------------ render */
-function render() {
-  drawMap(); drawScope(); drawSpectrum(); renderResults(); updateReadout();
-}
-function redrawAll() {
-  if ($("#view-event").hidden) return;
-  drawMap(); drawScope(); drawSpectrum();
-}
-let resizeTimer = 0;
-new ResizeObserver(() => { clearTimeout(resizeTimer); resizeTimer = setTimeout(redrawAll, 60); }).observe($("#view-event"));
-
-/* ------------------------------------------------------------------ keyboard */
-document.addEventListener("keydown", e => {
-  if (e.target.matches("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.key === "r" || e.key === "R") { e.preventDefault(); run(); }
-  else if (e.key === "t" || e.key === "T") applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
-  else if (/^[1-5]$/.test(e.key)) runCase(+e.key - 1);
-  else if (e.key === "Escape") { state.zoom = null; drawScope(); updateReadout(); }
-});
-
-/* ------------------------------------------------------------------ start */
-renderCases();
-redrawAll();
-fetch("/api/benchmark_summary").then(r => r.json()).then(v => {
-  const ok = v.model_status === "verified";
-  setStatus(ok ? "ok" : "bad",
-    ok ? `Server connected · classifier verified${v.model_sha256 ? " (" + v.model_sha256.slice(0, 8) + ")" : ""}` : `Classifier ${v.model_status}`,
-    ok ? "Model file SHA-256 matched its sidecar before loading" : "");
-  renderValidation(v);
-}).catch(() => setStatus("bad", "Server not reachable"));
-
-const fromHash = paramsFromHash();
-if (fromHash) { writeForm(fromHash); run(fromHash); } else { runCase(0); }
-</script>
+    // Initial load
+    window.addEventListener("DOMContentLoaded", () => {
+      initSolarGrid();
+      updateTargetDisplay();
+      runSimulation();
+    });
+  </script>
 </body>
 </html>

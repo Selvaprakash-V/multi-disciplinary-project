@@ -387,6 +387,10 @@
       border-left: 4px solid var(--success);
       background: var(--success-bg);
     }
+    .verdict-box.warning {
+      border-left: 4px solid #b45309;
+      background: #fffbeb;
+    }
     .verdict-header {
       display: flex;
       justify-content: space-between;
@@ -400,6 +404,7 @@
     }
     .verdict-box.defect .verdict-title { color: #991b1b; }
     .verdict-box.normal .verdict-title { color: #166534; }
+    .verdict-box.warning .verdict-title { color: #b45309; }
 
     .verdict-desc {
       font-size: 12px;
@@ -1199,21 +1204,29 @@
     }
 
     function renderImageResults(data) {
+      const isInvalid = data.is_solar_panel === false || (data.verdict && data.verdict.includes("INVALID"));
       const isDefect = data.is_crack_detected;
       const vBox = document.getElementById("imgVerdictBox");
       const vTitle = document.getElementById("imgVerdictTitle");
       const vConf = document.getElementById("imgConfidence");
       const vDesc = document.getElementById("imgVerdictDesc");
 
-      vBox.className = "verdict-box " + (isDefect ? "defect" : "normal");
-      vTitle.textContent = data.verdict;
-      vConf.textContent = `${data.confidence_pct}% Confidence`;
-      vDesc.textContent = data.recommendation;
+      if (isInvalid) {
+        vBox.className = "verdict-box warning";
+        vTitle.textContent = data.verdict;
+        vConf.textContent = "Rejected (Out-of-Domain)";
+        vDesc.textContent = data.recommendation;
+      } else {
+        vBox.className = "verdict-box " + (isDefect ? "defect" : "normal");
+        vTitle.textContent = data.verdict;
+        vConf.textContent = `${data.confidence_pct}% Confidence`;
+        vDesc.textContent = data.recommendation;
+      }
 
       document.getElementById("imgMetricClass").textContent = data.classification;
-      document.getElementById("imgMetricLength").textContent = `${data.crack_length_mm} mm`;
+      document.getElementById("imgMetricLength").textContent = isInvalid ? "N/A" : `${data.crack_length_mm} mm`;
       document.getElementById("imgMetricSeverity").textContent = data.severity;
-      document.getElementById("imgMetricLoss").textContent = `-${data.power_loss_est_pct}%`;
+      document.getElementById("imgMetricLoss").textContent = isInvalid ? "N/A" : `-${data.power_loss_est_pct}%`;
 
       document.getElementById("rawCellImage").src = data.original_image_b64;
       document.getElementById("annotatedCellImage").src = data.annotated_image_b64;
@@ -1222,11 +1235,11 @@
       // Log inspection
       logInspection({
         method: "Optical / EL Scan",
-        source: "Solar Cell Image",
-        verdict: isDefect ? "CRACK DETECTED" : "PASS (INTACT)",
+        source: isInvalid ? "Non-Solar Image" : "Solar Cell Image",
+        verdict: isInvalid ? "REJECTED (NON-SOLAR)" : (isDefect ? "CRACK DETECTED" : "PASS (INTACT)"),
         classification: data.classification,
-        confidence: `${data.confidence_pct}%`,
-        metric: isDefect ? `Length: ${data.crack_length_mm} mm` : "Defect-Free"
+        confidence: isInvalid ? "0%" : `${data.confidence_pct}%`,
+        metric: isInvalid ? "Rejected" : (isDefect ? `Length: ${data.crack_length_mm} mm` : "Defect-Free")
       });
     }
 

@@ -91,6 +91,53 @@ def generate_preset_cell(preset_name: str) -> np.ndarray:
     return img
 
 
+def validate_solar_image(bgr: np.ndarray) -> Tuple[bool, str]:
+    """
+    Validate whether the input image conforms to the visual and spectral domain of
+    photovoltaic modules (outdoor monocrystalline/polycrystalline cells) or
+    electroluminescence (EL) silicon wafers. Rejects arbitrary non-PV imagery
+    such as web application screenshots, documents, UI forms, natural scenery, or pets.
+    """
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+
+    # 1. Reject white documents, web UI screenshots, and forms
+    white_245 = float(np.mean(gray > 245))
+    white_230 = float(np.mean(gray > 230))
+    mean_gray = float(np.mean(gray))
+    std_gray = float(np.std(gray))
+
+    if white_245 > 0.12 or white_230 > 0.25 or mean_gray > 220.0:
+        return False, "Document or web application screenshot detected (high white background area)"
+
+    if mean_gray < 15.0 or std_gray < 6.0:
+        return False, "Under-exposed, solid blank, or featureless image"
+
+    # 2. Check color domain
+    b, _, r = cv2.split(bgr)
+    color_diff = float(np.mean(np.abs(b.astype(float) - r.astype(float))))
+    is_color = color_diff > 12.0
+
+    if is_color:
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+        h_ch, s_ch, v_ch = cv2.split(hsv)
+
+        # Silicon solar panels: deep blue/cyan polycrystalline (H: 85-140, S > 20)
+        # or dark monocrystalline (V < 130, S < 70)
+        blue_pv = (h_ch >= 85) & (h_ch <= 140) & (s_ch > 20)
+        dark_pv = (v_ch < 130) & (s_ch < 70)
+        pv_ratio = float(np.mean(blue_pv | dark_pv))
+
+        if pv_ratio < 0.25:
+            return False, "Non-photovoltaic imagery (lacks PV silicon color signature)"
+
+        return True, "Valid Outdoor Solar Module"
+    else:
+        # Grayscale / EL wafer
+        if mean_gray > 225.0 or mean_gray < 25.0:
+            return False, "Out of valid EL wafer brightness range"
+        return True, "Valid EL Solar Wafer"
+
+
 def analyze_solar_image(image_bytes: bytes) -> Dict[str, Any]:
     """
     Process an uploaded solar panel or cell image.
@@ -103,6 +150,30 @@ def analyze_solar_image(image_bytes: bytes) -> Dict[str, Any]:
         raise ValueError("Could not decode image file. Please provide a valid JPG or PNG.")
 
     h, w = bgr.shape[:2]
+
+    # Pre-validation: verify image belongs to the solar PV domain
+    is_pv, domain_reason = validate_solar_image(bgr)
+    if not is_pv:
+        _, orig_buf = cv2.imencode(".png", bgr)
+        orig_b64 = base64.b64encode(orig_buf).decode("utf-8")
+        return {
+            "verdict": "INVALID INPUT (NOT A SOLAR PANEL)",
+            "is_crack_detected": False,
+            "is_solar_panel": False,
+            "classification": "Non-Photovoltaic Imagery / Out-of-Domain",
+            "severity": "N/A",
+            "risk_level": "N/A",
+            "confidence_pct": 0.0,
+            "crack_length_mm": 0.0,
+            "crack_segments_count": 0,
+            "power_loss_est_pct": 0.0,
+            "recommendation": f"Input rejected: {domain_reason}. The uploaded image does not exhibit photovoltaic cell or EL wafer characteristics. Please upload an optical photo of a solar panel or an EL scan.",
+            "image_width_px": w,
+            "image_height_px": h,
+            "annotated_image_b64": f"data:image/png;base64,{orig_b64}",
+            "original_image_b64": f"data:image/png;base64,{orig_b64}",
+        }
+
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     b, g, r = cv2.split(bgr)
 
@@ -291,6 +362,7 @@ def analyze_solar_image(image_bytes: bytes) -> Dict[str, Any]:
     return {
         "verdict": verdict,
         "is_crack_detected": is_crack_detected,
+        "is_solar_panel": True,
         "classification": classification,
         "severity": severity,
         "risk_level": risk_level,

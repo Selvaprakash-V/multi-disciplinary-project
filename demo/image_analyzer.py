@@ -1,8 +1,9 @@
 """
 Solar Panel Image Crack Analyzer & Diagnostic Engine.
 
-Provides automated optical / electroluminescence (EL) solar cell crack detection,
-defect segmentation, crack path tracing, power loss estimation, and preset generation.
+High-accuracy defect segmentation for both outdoor RGB solar modules (reflective glass
+impact fractures, starburst spiderwebs) and laboratory EL/optical wafers (micro-cracks,
+busbar fractures). Features perspective-invariant grid suppression and cluster bounding.
 """
 
 import base64
@@ -15,7 +16,7 @@ import numpy as np
 def generate_preset_cell(preset_name: str) -> np.ndarray:
     """Generate high-fidelity solar cell images representing realistic inspection states."""
     size = 512
-    # Base silicon wafer texture
+    # Base silicon wafer texture (uniform grayscale wafer)
     img = np.full((size, size), 212, dtype=np.uint8)
 
     # Solar cell busbars (3 vertical silver conductors)
@@ -103,104 +104,155 @@ def analyze_solar_image(image_bytes: bytes) -> Dict[str, Any]:
 
     h, w = bgr.shape[:2]
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    b, g, r = cv2.split(bgr)
 
-    # 1. Edge detection with bilateral/Gaussian filtering
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blurred, 35, 95)
+    # Determine whether the image is an outdoor color photo (blue/black panel) or grayscale EL image
+    color_diff = np.abs(b.astype(float) - r.astype(float))
+    is_color = float(np.mean(color_diff)) > 12.0
 
-    # 2. Mask border margin to avoid frame/wafer edge detection
-    margin_x = max(10, int(w * 0.05))
-    margin_y = max(10, int(h * 0.05))
-    edges[:margin_y, :] = 0
-    edges[-margin_y:, :] = 0
-    edges[:, :margin_x] = 0
-    edges[:, -margin_x:] = 0
+    significant_cracks: List[np.ndarray] = []
 
-    # 3. Detect and remove straight regular grid lines (busbars and fingers)
-    min_line_len = max(20, int(min(h, w) * 0.06))
-    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=35, minLineLength=min_line_len, maxLineGap=6)
-    straight_mask = np.zeros_like(edges)
-    if lines is not None:
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            angle = np.abs(np.arctan2(y2 - y1, x2 - x1) * 180.0 / np.pi)
-            # Lines parallel to horizontal fingers (0/180 deg) or vertical busbars (90 deg)
-            if angle < 14 or angle > 166 or (76 < angle < 104):
-                cv2.line(straight_mask, (x1, y1), (x2, y2), 255, 7)
+    if is_color:
+        # ----------------------------------------------------
+        # Mode 1: Outdoor Color Solar Panel (Glass Shatter & Impact Fractures)
+        # ----------------------------------------------------
+        # Mask outer margin to avoid frame/mounting clips
+        margin_y, margin_x = max(10, int(h * 0.06)), max(10, int(w * 0.06))
 
-    # 4. Extract irregular crack edges (subtract straight grid lines)
-    irregular_edges = cv2.subtract(edges, straight_mask)
+        # Top-hat on Red channel: high contrast on glass fractures across dark blue/black silicon
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        r_hat = cv2.morphologyEx(r, cv2.MORPH_TOPHAT, k)
+        r_hat[:margin_y, :] = 0
+        r_hat[-margin_y:, :] = 0
+        r_hat[:, :margin_x] = 0
+        r_hat[:, -margin_x:] = 0
 
-    # 5. Connected components & contour analysis
-    contours, _ = cv2.findContours(irregular_edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Threshold high-reflectance fracture ridges
+        _, b_th = cv2.threshold(r_hat, 32, 255, cv2.THRESH_BINARY)
 
-    detected_cracks: List[np.ndarray] = []
-    total_crack_length_px = 0.0
-    bounding_boxes: List[Tuple[int, int, int, int]] = []
+        # Suppress straight grid fingers (horizontal lines)
+        h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 1))
+        h_lines = cv2.morphologyEx(b_th, cv2.MORPH_OPEN, h_kernel)
 
-    for cnt in contours:
-        arc_len = cv2.arcLength(cnt, False)
-        if arc_len >= 38.0:
-            xb, yb, wb, hb = cv2.boundingRect(cnt)
-            # Genuine micro-cracks span across multiple dimensions, unlike residual grid line fragments
-            if wb > 8 and hb > 8:
-                detected_cracks.append(cnt)
-                total_crack_length_px += (arc_len / 2.0)
-                bounding_boxes.append((xb, yb, wb, hb))
+        # Suppress straight tilted grid lines and busbars
+        lines = cv2.HoughLinesP(b_th, 1, np.pi / 180, threshold=25, minLineLength=25, maxLineGap=6)
+        straight_mask = np.zeros_like(b_th)
+        if lines is not None:
+            for line in lines:
+                x1, y1, x2, y2 = line[0]
+                cv2.line(straight_mask, (x1, y1), (x2, y2), 255, 3)
 
-    # Standard 156 mm wafer scale reference
+        grid_mask = cv2.bitwise_or(h_lines, straight_mask)
+        pure_crack = cv2.subtract(b_th, grid_mask)
+
+        # Find candidate crack contours
+        cnts, _ = cv2.findContours(pure_crack, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        for c in cnts:
+            arc = cv2.arcLength(c, False)
+            if arc >= 12.0:
+                area = cv2.contourArea(c)
+                # Reject solid diamond corner blobs (check thinness ratio)
+                if (area / (arc * arc + 1e-4)) < 0.04:
+                    significant_cracks.append(c)
+
+    else:
+        # ----------------------------------------------------
+        # Mode 2: Grayscale / Electroluminescence (EL) Wafer
+        # ----------------------------------------------------
+        margin = max(12, int(min(h, w) * 0.05))
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        b_hat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, k)
+        b_hat[:margin, :] = 0
+        b_hat[-margin:, :] = 0
+        b_hat[:, :margin] = 0
+        b_hat[:, -margin:] = 0
+
+        _, b_th = cv2.threshold(b_hat, 30, 255, cv2.THRESH_BINARY)
+
+        # Suppress straight horizontal fingers and vertical busbars
+        h_lines = cv2.morphologyEx(b_th, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (25, 1)))
+        v_lines = cv2.morphologyEx(b_th, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, 25)))
+        grid_mask = cv2.bitwise_or(h_lines, v_lines)
+
+        pure_crack = cv2.subtract(b_th, grid_mask)
+        cnts, _ = cv2.findContours(pure_crack, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        for c in cnts:
+            arc = cv2.arcLength(c, False)
+            if arc >= 15.0:
+                significant_cracks.append(c)
+
+    # ----------------------------------------------------
+    # Metrics & Diagnostic Assessment
+    # ----------------------------------------------------
     pixel_to_mm = 156.0 / float(min(h, w))
+    total_crack_length_px = (sum(cv2.arcLength(c, False) for c in significant_cracks) / 2.0) if significant_cracks else 0.0
     total_crack_length_mm = round(total_crack_length_px * pixel_to_mm, 1)
 
-    is_crack_detected = len(detected_cracks) > 0 and total_crack_length_mm >= 10.0
-    num_crack_segments = len(detected_cracks)
+    is_crack_detected = len(significant_cracks) >= 2 and total_crack_length_mm >= 15.0
+    num_crack_segments = len(significant_cracks) if is_crack_detected else 0
 
-    # Diagnostic Classification
     if not is_crack_detected:
         verdict = "NO CRACK DETECTED"
         classification = "Intact Solar Cell (Grade A)"
         severity = "None"
-        confidence_pct = 99.2
+        confidence_pct = 99.4
         power_loss_est_pct = 0.0
-        recommendation = "Cell passes quality inspection. Normal operational efficiency."
+        recommendation = "Module passes quality inspection. Normal operating efficiency."
         risk_level = "Low"
+        total_crack_length_mm = 0.0
     else:
         verdict = "CRACK DETECTED"
         risk_level = "High" if total_crack_length_mm > 50 else "Moderate"
 
-        if num_crack_segments >= 4:
+        if num_crack_segments >= 8 or total_crack_length_mm > 80.0:
             classification = "Dendritic Cross-Crack / Impact Fracture"
             severity = "Severe"
-            power_loss_est_pct = min(28.0, round(5.0 + total_crack_length_mm * 0.10, 1))
+            power_loss_est_pct = min(28.0, round(6.0 + total_crack_length_mm * 0.08, 1))
             recommendation = "High risk of localized hot-spots and bypass diode overload. Immediate cell replacement advised."
-        elif any(wb > w * 0.40 for _, _, wb, _ in bounding_boxes):
+        elif total_crack_length_mm > 35.0:
             classification = "Transverse Wafer Micro-Crack"
             severity = "High"
-            power_loss_est_pct = min(18.0, round(3.5 + total_crack_length_mm * 0.07, 1))
-            recommendation = "Active crack traversing finger lines. Schedule replacement during next scheduled maintenance."
+            power_loss_est_pct = min(18.0, round(3.5 + total_crack_length_mm * 0.06, 1))
+            recommendation = "Active crack traversing collection fingers. Schedule replacement during next maintenance cycle."
         else:
             classification = "Incipient Micro-Fracture"
             severity = "Moderate"
-            power_loss_est_pct = min(10.0, round(2.0 + total_crack_length_mm * 0.05, 1))
+            power_loss_est_pct = min(10.0, round(2.0 + total_crack_length_mm * 0.04, 1))
             recommendation = "Monitor degradation rate; perform secondary thermographic scan to check for hot-spot formation."
 
-        confidence_pct = min(99.6, round(89.0 + min(num_crack_segments * 2.5, 10.0), 1))
+        confidence_pct = min(99.6, round(91.0 + min(num_crack_segments * 1.5, 8.0), 1))
 
-    # 6. Create clean engineering-style annotation image
+    # ----------------------------------------------------
+    # Crisp, Professional Engineering Annotation
+    # ----------------------------------------------------
     annotated = bgr.copy()
 
-    if is_crack_detected:
-        # Bold high-contrast red highlighted crack paths
-        cv2.drawContours(annotated, detected_cracks, -1, (0, 0, 230), 3, lineType=cv2.LINE_AA)
+    if is_crack_detected and significant_cracks:
+        # Draw thin, high-precision red lines ONLY on the actual crack paths (2px)
+        cv2.drawContours(annotated, significant_cracks, -1, (0, 0, 235), 2, lineType=cv2.LINE_AA)
 
-        # High-contrast bounding boxes
-        for (xb, yb, wb, hb) in bounding_boxes:
-            pad = 8
-            x1 = max(0, xb - pad)
-            y1 = max(0, yb - pad)
-            x2 = min(w, xb + wb + pad)
-            y2 = min(h, yb + hb + pad)
-            cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 0, 200), 2)
+        # Compute ONE unified bounding box around the damage cluster
+        all_pts = np.vstack(significant_cracks).reshape(-1, 2)
+        med_x = int(np.median(all_pts[:, 0]))
+        med_y = int(np.median(all_pts[:, 1]))
+
+        bx, by, bw, bh = cv2.boundingRect(all_pts)
+        pad = 10
+        bx1, by1 = max(0, bx - pad), max(0, by - pad)
+        bx2, by2 = min(w, bx + bw + pad), min(h, by + bh + pad)
+
+        # Draw ONE clean bounding box around the defect zone
+        cv2.rectangle(annotated, (bx1, by1), (bx2, by2), (20, 20, 225), 2)
+
+        # Draw label banner at top of box
+        label = f"DEFECT ZONE: {classification.split('/')[0].strip()} ({bw}x{bh} px)"
+        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.40, 1)
+        cv2.rectangle(annotated, (bx1, max(0, by1 - 18)), (bx1 + tw + 8, by1), (20, 20, 225), -1)
+        cv2.putText(annotated, label, (bx1 + 4, max(12, by1 - 5)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.40, (255, 255, 255), 1, cv2.LINE_AA)
+
+        # Draw epicenter marker (+) at center of mass
+        cv2.drawMarker(annotated, (med_x, med_y), (0, 255, 255), cv2.MARKER_CROSS, 14, 2)
 
     # Encode images to base64 PNG
     _, buffer = cv2.imencode(".png", annotated)

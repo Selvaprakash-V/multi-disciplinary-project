@@ -177,6 +177,26 @@ def analyze_solar_image(image_bytes: bytes) -> Dict[str, Any]:
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     b, g, r = cv2.split(bgr)
 
+    # ------------------------------------------------------------------
+    # Conductor Ribbon & Inter-Cell Border Exclusion Mask
+    # ------------------------------------------------------------------
+    # In solar panels, bright metallic ribbons (>160 brightness, width > 3px)
+    # are structural busbars and inter-cell borders, NEVER cracks.
+    ribbon_exclusion = np.zeros_like(gray)
+    mean_val = float(np.mean(gray))
+    if mean_val < 160.0:
+        ribbon_opened = cv2.morphologyEx(gray, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (4, 4)))
+        _, ribbon_mask = cv2.threshold(ribbon_opened, 160, 255, cv2.THRESH_BINARY)
+        ribbon_exclusion = cv2.dilate(ribbon_mask, cv2.getStructuringElement(cv2.MORPH_RECT, (11, 11)))
+
+    # Also exclude outer frame edges
+    margin_x = max(12, int(w * 0.04))
+    margin_y = max(10, int(h * 0.04))
+    ribbon_exclusion[:, :margin_x] = 255
+    ribbon_exclusion[:, -margin_x:] = 255
+    ribbon_exclusion[:margin_y, :] = 255
+    ribbon_exclusion[-margin_y:, :] = 255
+
     # Determine whether the image is an outdoor color photo (blue/black panel) or grayscale EL image
     color_diff = np.abs(b.astype(float) - r.astype(float))
     is_color = float(np.mean(color_diff)) > 12.0
@@ -191,14 +211,7 @@ def analyze_solar_image(image_bytes: bytes) -> Dict[str, Any]:
         # High-pass filter on Red channel to extract thin, high-contrast fracture fissures
         smooth_r = cv2.GaussianBlur(r, (13, 13), 0)
         r_diff = cv2.subtract(r, smooth_r)
-
-        # Exclude outer frame margin (aluminum edge frame on the left/borders)
-        margin_left = max(20, int(w * 0.10))
-        margin_edge = max(10, int(min(h, w) * 0.05))
-        r_diff[:, :margin_left] = 0
-        r_diff[:margin_edge, :] = 0
-        r_diff[-margin_edge:, :] = 0
-        r_diff[:, -margin_edge:] = 0
+        r_diff[ribbon_exclusion > 0] = 0
 
         # Threshold high-reflectance glass fracture lines
         _, binary = cv2.threshold(r_diff, 16, 255, cv2.THRESH_BINARY)
@@ -285,15 +298,30 @@ def analyze_solar_image(image_bytes: bytes) -> Dict[str, Any]:
         b_hat[-margin:, :] = 0
         b_hat[:, :margin] = 0
         b_hat[:, -margin:] = 0
+        b_hat[ribbon_exclusion > 0] = 0
 
-        _, b_th = cv2.threshold(b_hat, 28, 255, cv2.THRESH_BINARY)
+        _, b_th = cv2.threshold(b_hat, 24, 255, cv2.THRESH_BINARY)
+        b_th[ribbon_exclusion > 0] = 0
 
         # Suppress straight horizontal fingers and vertical busbars
         h_lines = cv2.morphologyEx(b_th, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (25, 1)))
         v_lines = cv2.morphologyEx(b_th, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (1, 25)))
-        grid_mask = cv2.bitwise_or(h_lines, v_lines)
+
+        # Suppress straight tilted grid lines and busbar borders
+        straight_mask = np.zeros_like(b_th)
+        lines = cv2.HoughLinesP(b_th, 1, np.pi / 180, threshold=20, minLineLength=25, maxLineGap=4)
+        if lines is not None:
+            for l in lines:
+                x1, y1, x2, y2 = l[0]
+                dx, dy = abs(x2 - x1), abs(y2 - y1)
+                deg = np.degrees(np.arctan2(dy, dx))
+                if deg < 15 or deg > 75:  # horizontal or vertical grid structures
+                    cv2.line(straight_mask, (x1, y1), (x2, y2), 255, 4)
+
+        grid_mask = cv2.bitwise_or(cv2.bitwise_or(h_lines, v_lines), straight_mask)
 
         pure_crack = cv2.subtract(b_th, grid_mask)
+        pure_crack[ribbon_exclusion > 0] = 0
         cnts, _ = cv2.findContours(pure_crack, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
         significant_cracks: List[np.ndarray] = [c for c in cnts if cv2.arcLength(c, False) >= 14.0]

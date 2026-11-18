@@ -15,7 +15,9 @@ Integrity rules (docs/research/CODEBASE_EVALUATION.md §2.4):
 import base64
 import json
 import sys
+import threading
 from pathlib import Path
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -55,6 +57,7 @@ sim = Tier0Simulator(module_config=module_cfg, sensor_config=sensor_cfg)
 daq_twin = DAQDigitalTwin(daq_config=daq_cfg, sensor_config=sensor_cfg, seed=42)
 feat_extractor = AEFeatureExtractor(sample_rate_hz=daq_cfg.adc.rate_hz)
 localizer = TDOALocalizer(sensor_cfg.positions_mm)
+_sim_lock = threading.Lock()
 
 MODEL_PATH = root / "models" / "ae_feature_classifier.joblib"
 clf = None
@@ -78,12 +81,22 @@ SOURCES = {
 }
 
 
+# Label the classifier is expected to return for each demo source type.
+SOURCE_TO_EVENT_CLASS = {
+    "crack_initiation": "crack_initiation", "crack_growth": "crack_growth", "crack_friction": "crack_friction",
+    "noise_rain": "rain", "noise_hail": "hail", "noise_inverter": "emi_burst",
+    "noise_wind": "wind_rattle", "noise_thermal": "thermal_tick",
+}
+SOURCE_ONSET_US = 400.0  # emission time of the simulated source inside the 2.56 ms record
+
+
 class SimulationRequest(BaseModel):
     x_mm: float
     y_mm: float
     source_type: str = "crack_initiation"
     temperature_c: float = 25.0
     energy: float = 1.5
+    seed: Optional[int] = None  # same seed + same inputs -> identical event
 
 
 def get_cell_coordinates(x_mm, y_mm, width_mm, length_mm, rows=20, cols=6):
@@ -102,7 +115,18 @@ def get_index():
 
 @app.post("/api/simulate")
 def run_simulation(req: SimulationRequest):
-    rng = np.random.default_rng()
+    seed = int(req.seed) if req.seed is not None else int(np.random.default_rng().integers(0, 2**31 - 1))
+    with _sim_lock:  # the DAQ twin is shared; keep its noise streams per request
+        return _simulate(req, seed)
+
+
+def _simulate(req: SimulationRequest, seed: int):
+    rng = np.random.default_rng(seed)
+    # Electronic noise (preamp, ADC jitter) is drawn from generators inside the DAQ twin.
+    # Re-seed them from the request seed so the same seed reproduces the same record;
+    # the sensor gain spread is fixed at start-up and represents the installed hardware.
+    daq_twin.analog_fe.rng = np.random.default_rng([seed, 1])
+    daq_twin.adc.rng = np.random.default_rng([seed, 2])
     st = req.source_type.lower()
     sc, ct, nc, is_crack_gt = SOURCES.get(st, SOURCES["crack_initiation"])
     width, length = module_cfg.width_mm, module_cfg.length_mm
@@ -114,13 +138,14 @@ def run_simulation(req: SimulationRequest):
                                 energy_arbitrary=float(np.clip(req.energy, 0.05, 50.0)),
                                 rise_time_us=float(rng.uniform(1.0, 3.0)))
     temp = float(np.clip(req.temperature_c, -30.0, 90.0))
-    mech = sim.simulate(src_cfg, temperature_c=temp, rng=rng, onset_s=400e-6)
+    mech = sim.simulate(src_cfg, temperature_c=temp, rng=rng, onset_s=SOURCE_ONSET_US * 1e-6)
     mech = mech + sim.source_lib.ambient_background(mech.shape[0], rng, level=2e-7)
     daq_out = daq_twin.process_mechanical_waves(mech, channel_skew_ns=rng.uniform(-5.0, 5.0, 4))
     volts = daq_out["calibrated_volts"]
 
     onset_samples = [int(OnsetPicker.threshold_onset(volts[ch])) for ch in range(4)]
-    loc = localizer.locate(volts, v_eff_m_s=sim.s0_velocity(temp), bounds_mm=(0.0, width, 0.0, length))
+    v_s0 = float(sim.s0_velocity(temp))
+    loc = localizer.locate(volts, v_eff_m_s=v_s0, bounds_mm=(0.0, width, 0.0, length))
     x_est = float(np.clip(loc["x_mm"], 0.0, width)) if np.isfinite(loc["x_mm"]) else float("nan")
     y_est = float(np.clip(loc["y_mm"], 0.0, length)) if np.isfinite(loc["y_mm"]) else float("nan")
     located = np.isfinite(x_est)
@@ -143,15 +168,38 @@ def run_simulation(req: SimulationRequest):
             "crack_probability": round(p_crack * 100.0, 1),
             "confidence": round(float(np.max(proba)) * 100.0, 1),
             "model_name": "AEFeatureClassifier (gradient-boosted trees, SHA-256 verified)",
+            "class_probabilities": {c: round(float(p), 4) for c, p in zip(clf.classes, proba)},
+            "new_fracture_classes": sorted(NEW_FRACTURE_CLASSES),
+            "decision_threshold": 0.5,
         }
     else:
         ml = {"is_crack_pred": -1, "verdict": "MODEL UNAVAILABLE", "predicted_source": None,
-              "crack_probability": 0.0, "confidence": 0.0, "model_name": f"none ({model_status})"}
+              "crack_probability": 0.0, "confidence": 0.0, "model_name": f"none ({model_status})",
+              "class_probabilities": {}, "new_fracture_classes": sorted(NEW_FRACTURE_CLASSES),
+              "decision_threshold": 0.5}
 
+    fs = float(daq_cfg.adc.rate_hz)
+    arrival_us = [None if not np.isfinite(a) else round(float(a) / fs * 1e6, 2) for a in arr]
+
+    def fin(v, nd=1):
+        return round(float(v), nd) if v is not None and np.isfinite(v) else None
+
+    # Oscilloscope "peak detect": keep the largest-magnitude sample of each block of `step`
+    # samples (sign preserved). Plain decimation (every 10th sample = 100 kS/s) would alias
+    # the 100-300 kHz AE burst and hide its envelope.
     step = 10
+    n_blk = volts.shape[1] // step
+    blocks = volts[:, : n_blk * step].reshape(volts.shape[0], n_blk, step)
+    pick = np.abs(blocks).argmax(axis=2)
+    peak_detect = np.take_along_axis(blocks, pick[..., None], axis=2)[..., 0] * 1000.0  # mV
     return {
+        "run": {"seed": seed, "temperature_c": temp, "energy": float(src_cfg.energy_arbitrary),
+                "source_type": st, "s0_velocity_m_s": round(v_s0, 1), "source_onset_us": SOURCE_ONSET_US,
+                "sample_rate_hz": fs, "adc_bits": int(daq_cfg.adc.bits), "triggered": bool(daq_out["triggered"]),
+                "model_status": model_status},
         "ground_truth": {"x_mm": round(x, 1), "y_mm": round(y, 1), "cell_row": row_gt, "cell_col": col_gt,
-                         "cell_id": cell_label_gt, "is_crack": is_crack_gt, "source_type": st},
+                         "cell_id": cell_label_gt, "is_crack": is_crack_gt, "source_type": st,
+                         "event_class": SOURCE_TO_EVENT_CLASS.get(st, st)},
         "reconstruction": {
             "x_mm": round(x_est, 1) if located else None, "y_mm": round(y_est, 1) if located else None,
             "cell_row": row_est, "cell_col": col_est, "cell_id": cell_label_est,
@@ -159,6 +207,11 @@ def run_simulation(req: SimulationRequest):
             "error_mm": round(loc_err, 1) if located else None,
             "time_differences_us": dt_us,
             "uncertainty_semi_major_mm": round(float(loc["uncertainty_semi_major_mm"]), 1) if located else None,
+            "uncertainty_semi_minor_mm": fin(loc.get("uncertainty_semi_minor_mm")) if located else None,
+            "uncertainty_angle_deg": fin(loc.get("uncertainty_angle_deg")) if located else None,
+            "residual_rms_us": fin(loc.get("residual_rms_s", float("nan")) * 1e6, 2) if located else None,
+            "sensors_used": int(loc.get("sensors_used", 0)),
+            "arrival_us": arrival_us,
         },
         "ml_inference": ml,
         "features": {
@@ -167,10 +220,13 @@ def run_simulation(req: SimulationRequest):
             "centroid_khz": round(ch1.centroid_khz, 1), "peak_freq_khz": round(ch1.peak_freq_khz, 1),
         },
         "oscilloscope": {
-            "time_us": (np.arange(0, volts.shape[1], step) * 1.0).tolist(),
-            "waveforms": {f"ch{ch + 1}": (volts[ch, ::step] * 1000.0).round(2).tolist() for ch in range(4)},
+            "time_us": (np.arange(n_blk) * step * 1.0).tolist(),
+            "waveforms": {f"ch{ch + 1}": peak_detect[ch].round(3).tolist() for ch in range(4)},
+            "display_mode": f"peak detect, {step} samples per point",
             "onset_samples": onset_samples,
-            "pre_trigger_samples": 400,
+            "pre_trigger_samples": int(SOURCE_ONSET_US * fs / 1e6),
+            # full-resolution record (1 sample = 1 us at 1 MS/s) for plotting, spectra and export
+            "samples_mv": [(volts[ch] * 1000.0).round(3).tolist() for ch in range(volts.shape[0])],
         },
         "module": {
             "width_mm": width, "length_mm": length, "rows": 20, "cols": 6,
@@ -218,6 +274,8 @@ def get_benchmark_summary():
         "vv_suite": load("validation/out/vv_suite_results.json"),
         "reproducibility": load("data/reproducibility_proof.json"),
         "model_status": model_status,
+        "model_sha256": MODEL_PATH.with_suffix(MODEL_PATH.suffix + ".sha256").read_text().strip().split()[0]
+        if MODEL_PATH.with_suffix(MODEL_PATH.suffix + ".sha256").exists() else None,
         "caveat": "Simulation-only results; no real PV acoustic-emission data have been used yet.",
     }
 

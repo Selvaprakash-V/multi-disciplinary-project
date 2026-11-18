@@ -145,7 +145,7 @@ def _simulate(req: SimulationRequest, seed: int):
 
     onset_samples = [int(OnsetPicker.threshold_onset(volts[ch])) for ch in range(4)]
     v_s0 = float(sim.s0_velocity(temp))
-    v_a0 = float(sim.a0_velocity(temp))
+    v_a0 = float(sim.a0_front_velocity(temp))
     loc = localizer.locate(volts, v_eff_m_s=v_s0, v_a0_m_s=v_a0, min_snr_db=10.0, bounds_mm=(0.0, width, 0.0, length))
     x_est = float(np.clip(loc["x_mm"], 0.0, width)) if np.isfinite(loc["x_mm"]) else float("nan")
     y_est = float(np.clip(loc["y_mm"], 0.0, length)) if np.isfinite(loc["y_mm"]) else float("nan")
